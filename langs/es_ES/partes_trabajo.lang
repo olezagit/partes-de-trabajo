@@ -1,0 +1,26 @@
+# Fichero de idioma español - Módulo Partes de Trabajo
+# Dolibarr language file
+
+PartesTrabajo = Partes de Trabajo
+MyPartes = Mis Partes de Trabajo
+PartesDesc = Gestión de albaranes asignados al usuario
+NoPartesAsigned = No tienes partes de trabajo asignados pendientes
+TipoParteTrabajo = Parte de trabajo
+TipoPuestaEnMarcha = Puesta en marcha
+TipoAveria = Avería
+TipoMantenimiento = Mantenimiento
+EstadoValidado = Validado
+EstadoEnCurso = En curso
+EstadoEnviado = Enviado
+RefParte = Referencia
+FechaParte = Fecha
+ClienteParte = Cliente
+DireccionParte = Dirección
+LocalidadParte = Localidad
+TipoParte = Tipo de parte
+EstadoParte = Estado
+PartesModule = Módulo Partes de Trabajo
+PartesModuleDesc = Muestra los albaranes asignados al usuario actual excluyendo borradores y finalizados
+SetupPartesTrabajo = Configuración del módulo Partes de Trabajo
+ExtraFieldTecnico = Campo extra para técnico asignado
+ExtraFieldTipo = Campo extra para tipo de parte

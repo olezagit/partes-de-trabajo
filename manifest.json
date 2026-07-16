@@ -1,0 +1,57 @@
+{
+    "name": "Partes de Trabajo",
+    "short_name": "Mis Partes",
+    "description": "Gestión de partes de trabajo asignados — acceso offline",
+    "start_url": "/custom/partes_trabajo/",
+    "scope": "/custom/partes_trabajo/",
+    "display": "standalone",
+    "orientation": "portrait-primary",
+    "theme_color": "#0F172A",
+    "background_color": "#0F172A",
+    "lang": "es",
+    "dir": "ltr",
+    "categories": ["business", "productivity"],
+    "icons": [
+        {
+            "src": "/custom/partes_trabajo/icons/icon-72.png",
+            "sizes": "72x72",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/custom/partes_trabajo/icons/icon-96.png",
+            "sizes": "96x96",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/custom/partes_trabajo/icons/icon-128.png",
+            "sizes": "128x128",
+            "type": "image/png",
+            "purpose": "any"
+        },
+        {
+            "src": "/custom/partes_trabajo/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/custom/partes_trabajo/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ],
+    "shortcuts": [
+        {
+            "name": "Mis Partes",
+            "short_name": "Partes",
+            "description": "Ver partes asignados",
+            "url": "/custom/partes_trabajo/",
+            "icons": [{ "src": "/custom/partes_trabajo/icons/icon-96.png", "sizes": "96x96" }]
+        }
+    ],
+    "screenshots": [],
+    "prefer_related_applications": false
+}

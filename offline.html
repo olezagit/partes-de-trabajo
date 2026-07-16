@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Sin conexión — Partes de Trabajo</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    background: #0F172A;
+    color: #E2E8F0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .icon {
+    font-size: 72px;
+    margin-bottom: 24px;
+    animation: float 3s ease-in-out infinite;
+  }
+
+  @keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50%       { transform: translateY(-10px); }
+  }
+
+  h1 {
+    font-size: 1.6rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: #F8FAFC;
+  }
+
+  p {
+    font-size: 0.95rem;
+    color: #94A3B8;
+    line-height: 1.6;
+    max-width: 340px;
+    margin: 0 auto 32px;
+  }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 13px 28px;
+    background: #1D4ED8;
+    color: #fff;
+    border: none;
+    border-radius: 12px;
+    font-size: 0.95rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background .2s;
+  }
+
+  .btn:hover { background: #2563EB; }
+
+  .status {
+    margin-top: 24px;
+    font-size: 0.8rem;
+    color: #475569;
+  }
+
+  .dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #DC2626;
+    margin-right: 6px;
+    animation: pulse 1.5s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: .3; }
+  }
+</style>
+</head>
+<body>
+
+<div class="icon">📴</div>
+<h1>Sin conexión</h1>
+<p>
+  No tienes acceso a internet en este momento.<br>
+  Cuando recuperes la señal, la app se actualizará automáticamente.
+</p>
+
+<button class="btn" onclick="location.reload()">
+  🔄 Reintentar
+</button>
+
+<p class="status">
+  <span class="dot"></span>
+  Comprobando conexión…
+</p>
+
+<script>
+  // Redirigir automáticamente cuando haya red
+  window.addEventListener('online', () => {
+    location.href = '/custom/partes_trabajo/';
+  });
+
+  // Comprobar cada 10s
+  setInterval(() => {
+    fetch('/custom/partes_trabajo/api/partes.php', {
+      method: 'HEAD',
+      headers: { 'X-Requested-With': 'XMLHttpRequest' }
+    }).then(() => {
+      location.href = '/custom/partes_trabajo/';
+    }).catch(() => {});
+  }, 10000);
+</script>
+</body>
+</html>
