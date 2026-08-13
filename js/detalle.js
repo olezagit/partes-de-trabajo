@@ -296,7 +296,7 @@ const PtDetalle = (() => {
                         ? `<div class="pd-tareas-progress-wrap">
                                <div class="pd-tareas-progress-bar" id="pd-tareas-progress-bar"></div>
                            </div>
-                           ${d.lineas.map((ln, i) => tareaHTML(ln, i)).join('')}`
+                           ${d.lineas.map((ln, i) => tareaHTML(ln, i, p.tipo_albaran)).join('')}`
                         : `<div class="pd-tareas-empty">
                                <span>📝</span>
                                <span>Sin tareas registradas en este parte</span>
@@ -305,15 +305,41 @@ const PtDetalle = (() => {
                 </div>
             </div>
 
+            <!-- ⑤.5 Fotos del trabajo -->
+            <div class="pd-section" id="sec-wrap-fotos">
+                <button class="pd-section-hdr" data-target="sec-fotos">
+                    <span class="pd-section-ico" style="background:#FEF3C7">📷</span>
+                    <span class="pd-section-title">
+                        Fotos del trabajo
+                        <span class="pd-fotos-subtitulo" id="pd-fotos-subtitulo">${(p.fotos||[]).filter(Boolean).length} / 10</span>
+                    </span>
+                    <span class="pd-chevron">▾</span>
+                </button>
+                <div class="pd-section-body" id="sec-fotos">
+                    <div class="pd-fotos-grid" id="pd-fotos-grid">
+                        ${fotosSlotsHTML(p.fotos)}
+                    </div>
+                    <div class="pd-fotos-hint">Toca un hueco vacío para añadir una foto (cámara o galería). Máximo 10 fotos.</div>
+                    <input type="file" id="pd-foto-input" accept="image/*" style="display:none">
+                </div>
+            </div>
+
             <!-- ⑥ Anotaciones -->
             <div class="pd-section pd-section--nota">
                 <button class="pd-section-hdr" data-target="sec-nota">
                     <span class="pd-section-ico" style="background:#F5F3FF">✏️</span>
-                    <span class="pd-section-title">Añadir anotación</span>
+                    <span class="pd-section-title">Anotaciones</span>
                     <span class="pd-chevron">▾</span>
                 </button>
                 <div class="pd-section-body" id="sec-nota">
-                    ${p.note_public ? `<div class="pd-nota-previa"><span class="pd-nota-previa-lbl">Nota actual:</span>${escH(p.note_public)}</div>` : ''}
+                    <div class="pd-notas-lista" id="pd-notas-lista">
+                        ${notasListHTML(d.notas)}
+                    </div>
+                    ${p.note_public ? `
+                    <details class="pd-notas-legacy">
+                        <summary>Ver historial anterior</summary>
+                        <div class="pd-nota-previa">${escH(p.note_public)}</div>
+                    </details>` : ''}
                     <textarea class="pd-textarea" id="pd-nota-input" rows="4"
                         placeholder="Escribe aquí tu anotación sobre este parte…"></textarea>
                     <button class="pd-save-btn" id="pd-nota-save" data-id="${p.rowid}">
@@ -394,8 +420,10 @@ const PtDetalle = (() => {
         // Eventos
         panel.querySelector('.pd-close-btn').addEventListener('click', close);
         wireCollapses();
-        wireTareas(d.lineas, p.rowid);
+        wireTareas(d.lineas, p.rowid, p.tipo_albaran);
+        wireFotos(p.rowid, p);
         wireNota(p.rowid);
+        wireNotas(p.rowid);
         wireFirmas(p.rowid, p);
 
     }
@@ -491,7 +519,44 @@ const PtDetalle = (() => {
         return `<a href="mailto:${escH(email)}" class="pd-email-link">${escH(email)}</a>`;
     }
 
-    function tareaHTML(ln, idx) {
+    function fotosSlotsHTML(fotos) {
+        const lista = Array.isArray(fotos) ? fotos : [];
+        let html = '';
+        for (let i = 1; i <= 10; i++) {
+            const dataUrl = lista[i - 1] || '';
+            if (dataUrl) {
+                html += `
+                <div class="pd-foto-slot pd-foto-slot--filled" data-slot="${i}">
+                    <img src="${escH(dataUrl)}" class="pd-foto-thumb" data-slot="${i}" alt="Foto ${i} del parte">
+                    <button type="button" class="pd-foto-del" data-slot="${i}" aria-label="Eliminar foto ${i}">✕</button>
+                </div>`;
+            } else {
+                html += `
+                <button type="button" class="pd-foto-slot pd-foto-slot--empty" data-slot="${i}" aria-label="Añadir foto ${i}">
+                    <span class="pd-foto-add-ico">📷</span>
+                </button>`;
+            }
+        }
+        return html;
+    }
+
+    function notasListHTML(notas) {
+        const lista = Array.isArray(notas) ? notas : [];
+        if (lista.length === 0) {
+            return '<div class="pd-notas-vacio">Aún no hay anotaciones en este parte.</div>';
+        }
+        return lista.map(n => `
+            <div class="pd-nota-item" data-nota-id="${n.id}">
+                <div class="pd-nota-item-meta">
+                    <span class="pd-nota-item-autor">${escH(n.autor_nombre || '—')}</span>
+                    <span class="pd-nota-item-fecha">${escH(n.fecha || '')}${n.editada ? ' · editado' : ''}</span>
+                    ${n.editable ? `<button type="button" class="pd-nota-edit-btn" data-nota-id="${n.id}">✏️ Editar</button>` : ''}
+                </div>
+                <div class="pd-nota-item-texto" id="pd-nota-texto-${n.id}">${escH(n.texto)}</div>
+            </div>`).join('');
+    }
+
+    function tareaHTML(ln, idx, tipoAlbaran) {
         // El label es el título corto — la description puede ser larga con saltos de línea
         const label = (ln.label || 'Tarea ' + (idx + 1));
         const desc  = (ln.description && ln.description !== label) ? ln.description : '';
@@ -501,6 +566,7 @@ const PtDetalle = (() => {
         const id      = 'sec-tarea-' + idx;
         const checkId = 'check-tarea-' + idx;
         const hecha   = !!ln.tarea_realizada;
+        const nCampos = contarCamposFichaRellenos(ln.ficha);
 
         return `
         <div class="pd-section pd-section--tarea${hecha ? ' pd-tarea-ok' : ''}" id="wrap-tarea-${idx}"
@@ -522,6 +588,12 @@ const PtDetalle = (() => {
                     ${desc ? `<div class="pd-tarea-desc">${escH(desc)}</div>` : ''}
                     ${!desc && !ln.prod_ref ? `<div class="pd-tarea-nodesc">Sin descripción adicional</div>` : ''}
                 </div>
+                <!-- Ficha técnica del producto -->
+                <button type="button" class="pd-tarea-ficha-btn" data-idx="${idx}" data-rowid="${ln.rowid}">
+                    <span>📋 Ficha técnica</span>
+                    ${nCampos > 0 ? `<span class="pd-tarea-ficha-badge">${nCampos} rellenos</span>` : ''}
+                    <span class="pd-tarea-ficha-arrow">›</span>
+                </button>
                 <!-- Checkbox de completar -->
                 <div class="pd-tarea-check-wrap">
                     <div class="pd-tarea-check${hecha ? ' checked' : ''}" id="${checkId}" data-idx="${idx}" data-rowid="${ln.rowid}"
@@ -532,6 +604,15 @@ const PtDetalle = (() => {
                 </div>
             </div>
         </div>`;
+    }
+
+    /** Cuenta cuántos campos de la ficha técnica de una línea tienen valor (para el contador del botón). */
+    function contarCamposFichaRellenos(ficha) {
+        if (!ficha) return 0;
+        return Object.values(ficha).filter(v => {
+            if (Array.isArray(v)) return v.length > 0; // multiselect: solo cuenta si hay algo marcado
+            return v !== '' && v !== null && v !== false && v !== undefined;
+        }).length;
     }
 
     function escH(str) {
@@ -565,10 +646,14 @@ const PtDetalle = (() => {
     let tareasTotal       = 0;
     let tareasCompletadas = new Set();
     let parteIdActual     = null;
+    let lineasActuales    = [];
+    let tipoAlbaranActual = null;
 
-    function wireTareas(lineas, parteId) {
+    function wireTareas(lineas, parteId, tipoAlbaran) {
         tareasTotal   = lineas.length;
         parteIdActual = parteId;
+        lineasActuales = lineas;
+        tipoAlbaranActual = tipoAlbaran;
         tareasCompletadas.clear();
 
         // Inicializar el Set con las tareas que ya vienen marcadas desde la BD
@@ -580,6 +665,12 @@ const PtDetalle = (() => {
             chk.addEventListener('click', () => toggleTarea(chk));
             chk.addEventListener('keydown', e => {
                 if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTarea(chk); }
+            });
+        });
+        panel.querySelectorAll('.pd-tarea-ficha-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx, 10);
+                abrirFichaModal(lineasActuales[idx], idx);
             });
         });
         actualizarBotonTerminar();
@@ -735,10 +826,409 @@ const PtDetalle = (() => {
         }
     }
 
+    // ══════════════════════════════════════════════════════════════════════════
+    // Ficha técnica por producto (llx_commandedet_extrafields)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    let fichaModalEl = null;
+
+    /** Devuelve los grupos de campos aplicables según el tipo de albarán:
+     *  globales siempre + pm_ (tipo 2, Puesta en marcha) o man_ (tipo 3/4, Avería/Mantenimiento). */
+    function gruposFichaAplicables(tipoAlbaran) {
+        const meta = window.PT_CAMPOS_LINEA || { global: [], pm: [], man: [] };
+        const grupos = [{ titulo: null, campos: meta.global || [] }];
+        const tipoNum = parseInt(tipoAlbaran, 10);
+        if (tipoNum === 2) {
+            grupos.push({ titulo: 'Puesta en marcha', campos: meta.pm || [] });
+        } else if (tipoNum === 3 || tipoNum === 4) {
+            grupos.push({ titulo: 'Avería / Mantenimiento', campos: meta.man || [] });
+        }
+        return grupos;
+    }
+
+    function campoFichaHTML(campo, valor) {
+        if (campo.grupo) {
+            return `<div class="pd-ficha-subgrupo">${escH(campo.grupo)}</div>`;
+        }
+        const val = valor !== undefined && valor !== null ? valor : '';
+        if (campo.type === 'boolean') {
+            const on = !!val;
+            return `
+            <label class="pd-ficha-campo pd-ficha-campo--bool">
+                <span class="pd-ficha-campo-label">${escH(campo.label)}</span>
+                <span class="pd-ficha-toggle${on ? ' pd-ficha-toggle--on' : ''}" data-campo="${campo.name}" data-tipo="boolean"
+                      role="checkbox" aria-checked="${on ? 'true' : 'false'}" tabindex="0">
+                    <span class="pd-ficha-toggle-knob"></span>
+                </span>
+            </label>`;
+        }
+        if (campo.type === 'multiselect') {
+            const seleccionados = Array.isArray(val) ? val : [];
+            const opts = (campo.options || []).map(o => `
+                <label class="pd-ficha-multiopt${seleccionados.includes(o) ? ' pd-ficha-multiopt--on' : ''}">
+                    <input type="checkbox" data-campo="${campo.name}" data-tipo="multiselect" value="${escH(o)}"${seleccionados.includes(o) ? ' checked' : ''}>
+                    <span>${escH(o)}</span>
+                </label>`).join('');
+            return `
+            <div class="pd-ficha-campo pd-ficha-campo--multiselect">
+                <span class="pd-ficha-campo-label">${escH(campo.label)}</span>
+                <div class="pd-ficha-multiselect-opts">${opts}</div>
+            </div>`;
+        }
+        if (campo.type === 'select') {
+            const opts = (campo.options || []).map(o =>
+                `<option value="${escH(o)}"${val === o ? ' selected' : ''}>${escH(o)}</option>`
+            ).join('');
+            return `
+            <label class="pd-ficha-campo">
+                <span class="pd-ficha-campo-label">${escH(campo.label)}</span>
+                <select class="pd-ficha-input pd-ficha-select" data-campo="${campo.name}" data-tipo="select">
+                    <option value="">—</option>
+                    ${opts}
+                </select>
+            </label>`;
+        }
+        if (campo.type === 'number') {
+            return `
+            <label class="pd-ficha-campo">
+                <span class="pd-ficha-campo-label">${escH(campo.label)}</span>
+                <input type="number" inputmode="decimal" step="any" class="pd-ficha-input" data-campo="${campo.name}" data-tipo="number" value="${val === '' ? '' : escH(val)}">
+            </label>`;
+        }
+        // text (por defecto)
+        return `
+        <label class="pd-ficha-campo">
+            <span class="pd-ficha-campo-label">${escH(campo.label)}</span>
+            <input type="text" class="pd-ficha-input" data-campo="${campo.name}" data-tipo="text" value="${escH(val)}">
+        </label>`;
+    }
+
+    function abrirFichaModal(ln, idx) {
+        if (!ln) return;
+
+        if (!fichaModalEl) {
+            fichaModalEl = document.createElement('div');
+            fichaModalEl.className = 'pd-ficha-modal';
+            document.body.appendChild(fichaModalEl);
+            fichaModalEl.addEventListener('click', e => {
+                if (e.target === fichaModalEl || e.target.closest('.pd-ficha-modal-close')) cerrarFichaModal();
+            });
+        }
+
+        const grupos = gruposFichaAplicables(tipoAlbaranActual);
+        const ficha  = ln.ficha || {};
+
+        const cuerpo = grupos.map(g => `
+            ${g.titulo ? `<div class="pd-ficha-grupo-hdr">${escH(g.titulo)}</div>` : ''}
+            ${g.campos.map(c => campoFichaHTML(c, ficha[c.name])).join('')}
+        `).join('');
+
+        fichaModalEl.innerHTML = `
+            <div class="pd-ficha-modal-box">
+                <div class="pd-ficha-modal-hdr">
+                    <span>📋 ${escH(ln.label || 'Ficha técnica')}</span>
+                    <button type="button" class="pd-ficha-modal-close" aria-label="Cerrar">✕</button>
+                </div>
+                <div class="pd-ficha-modal-body">${cuerpo}</div>
+                <div class="pd-ficha-modal-footer">
+                    <button type="button" class="pd-ficha-guardar-btn" id="pd-ficha-guardar-btn">💾 Guardar ficha técnica</button>
+                    <div class="pd-ficha-feedback" id="pd-ficha-feedback"></div>
+                </div>
+            </div>`;
+
+        // Los toggles booleanos no son <input> nativos: se gestionan a mano
+        fichaModalEl.querySelectorAll('.pd-ficha-toggle').forEach(tg => {
+            const activar = () => {
+                const on = !tg.classList.contains('pd-ficha-toggle--on');
+                tg.classList.toggle('pd-ficha-toggle--on', on);
+                tg.setAttribute('aria-checked', on ? 'true' : 'false');
+            };
+            tg.addEventListener('click', activar);
+            tg.addEventListener('keydown', e => {
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activar(); }
+            });
+        });
+
+        // Chips de selección múltiple (p.ej. tuberías en pulgadas): sincronizar
+        // el estilo de "pill activa" con el estado real del checkbox nativo
+        fichaModalEl.querySelectorAll('.pd-ficha-multiopt input[type="checkbox"]').forEach(chk => {
+            chk.addEventListener('change', () => {
+                chk.closest('.pd-ficha-multiopt')?.classList.toggle('pd-ficha-multiopt--on', chk.checked);
+            });
+        });
+
+        document.getElementById('pd-ficha-guardar-btn')?.addEventListener('click', () => guardarFichaTecnica(idx));
+
+        requestAnimationFrame(() => fichaModalEl.classList.add('pd-ficha-modal--open'));
+    }
+
+    function cerrarFichaModal() {
+        fichaModalEl?.classList.remove('pd-ficha-modal--open');
+    }
+
+    async function guardarFichaTecnica(idx) {
+        const ln = lineasActuales[idx];
+        if (!ln || !fichaModalEl) return;
+        const btn      = document.getElementById('pd-ficha-guardar-btn');
+        const feedback = document.getElementById('pd-ficha-feedback');
+
+        const campos = {};
+        fichaModalEl.querySelectorAll('[data-campo]').forEach(el => {
+            const nombre = el.dataset.campo;
+            const tipo   = el.dataset.tipo;
+            if (tipo === 'boolean') {
+                campos[nombre] = el.classList.contains('pd-ficha-toggle--on');
+            } else if (tipo === 'multiselect') {
+                // Varios checkboxes comparten el mismo data-campo: acumular los marcados
+                if (!Array.isArray(campos[nombre])) campos[nombre] = [];
+                if (el.checked) campos[nombre].push(el.value);
+            } else {
+                campos[nombre] = el.value;
+            }
+        });
+
+        btn.disabled    = true;
+        btn.textContent = '⏳ Guardando…';
+
+        const payload = { linea_id: ln.rowid, parte_id: parteIdActual, campos };
+        const url = `${window.PT_BASE}/index.php?pt_do=linea_ficha`;
+
+        try {
+            if (navigator.onLine) {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
+
+                ln.ficha = Object.assign({}, ln.ficha, campos);
+                actualizarBadgeFicha(idx, ln.ficha);
+                if (typeof window.showToast === 'function') window.showToast('✅ Ficha técnica guardada', 'success');
+                cerrarFichaModal();
+            } else {
+                if (typeof window.ptSaveAccionOffline === 'function') {
+                    await window.ptSaveAccionOffline('linea_ficha', ln.rowid, payload, url);
+                } else if (typeof PtDB !== 'undefined') {
+                    await PtDB.saveAccion({ tipo: 'linea_ficha', parte_id: ln.rowid, payload, url, method: 'POST' });
+                }
+                ln.ficha = Object.assign({}, ln.ficha, campos);
+                actualizarBadgeFicha(idx, ln.ficha);
+                cerrarFichaModal();
+            }
+        } catch (err) {
+            feedback.textContent = '❌ Error: ' + err.message;
+            feedback.className   = 'pd-ficha-feedback pd-feedback--error';
+            btn.disabled    = false;
+            btn.textContent = '💾 Guardar ficha técnica';
+        }
+    }
+
+    function actualizarBadgeFicha(idx, ficha) {
+        const btn = panel.querySelector(`.pd-tarea-ficha-btn[data-idx="${idx}"]`);
+        if (!btn) return;
+        const n = contarCamposFichaRellenos(ficha);
+        let badge = btn.querySelector('.pd-tarea-ficha-badge');
+        if (n > 0) {
+            if (!badge) {
+                badge = document.createElement('span');
+                badge.className = 'pd-tarea-ficha-badge';
+                btn.insertBefore(badge, btn.querySelector('.pd-tarea-ficha-arrow'));
+            }
+            badge.textContent = `${n} rellenos`;
+        } else {
+            badge?.remove();
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Fotos del trabajo (hasta 10, foto_1..foto_10)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    function wireFotos(parteId, p) {
+        const grid  = panel.querySelector('#pd-fotos-grid');
+        const input = panel.querySelector('#pd-foto-input');
+        const subt  = panel.querySelector('#pd-fotos-subtitulo');
+        if (!grid || !input) return;
+
+        const actualizarContador = () => {
+            const n = grid.querySelectorAll('.pd-foto-slot--filled').length;
+            if (subt) subt.textContent = `${n} / 10`;
+        };
+
+        // Click en un hueco vacío → abrir selector de archivo (cámara o galería)
+        grid.addEventListener('click', e => {
+            const vacio = e.target.closest('.pd-foto-slot--empty');
+            if (vacio) {
+                input.dataset.slot = vacio.dataset.slot;
+                input.click();
+                return;
+            }
+            // Click en la miniatura (no en el botón ✕) → ver en grande
+            const thumb = e.target.closest('.pd-foto-thumb');
+            if (thumb && !e.target.closest('.pd-foto-del')) {
+                abrirLightbox(thumb.src);
+                return;
+            }
+            // Click en ✕ → eliminar
+            const del = e.target.closest('.pd-foto-del');
+            if (del) {
+                eliminarFoto(parteId, del.dataset.slot, grid, actualizarContador);
+            }
+        });
+
+        // Selección de archivo → comprimir y guardar
+        input.addEventListener('change', async () => {
+            const file = input.files && input.files[0];
+            const slot = input.dataset.slot;
+            input.value = ''; // permite volver a elegir el mismo archivo más tarde
+            if (!file || !slot) return;
+
+            if (!file.type.startsWith('image/')) {
+                if (typeof window.showToast === 'function') {
+                    window.showToast('⚠️ Selecciona un archivo de imagen', 'warn', 4000);
+                }
+                return;
+            }
+
+            const slotEl = grid.querySelector(`.pd-foto-slot[data-slot="${slot}"]`);
+            if (slotEl) {
+                slotEl.classList.add('pd-foto-slot--loading');
+                slotEl.innerHTML = `<span class="pd-foto-spinner"></span>`;
+            }
+
+            try {
+                const dataUrl = await comprimirImagen(file);
+
+                // Reemplazar el hueco por la miniatura ya comprimida (optimista)
+                const nuevo = document.createElement('div');
+                nuevo.className = 'pd-foto-slot pd-foto-slot--filled';
+                nuevo.dataset.slot = slot;
+                nuevo.innerHTML = `
+                    <img src="${dataUrl}" class="pd-foto-thumb" data-slot="${slot}" alt="Foto ${slot} del parte">
+                    <button type="button" class="pd-foto-del" data-slot="${slot}" aria-label="Eliminar foto ${slot}">✕</button>`;
+                slotEl?.replaceWith(nuevo);
+                actualizarContador();
+
+                await guardarProgreso({ id: parteId, ['foto_' + slot]: dataUrl });
+            } catch (err) {
+                console.error('[PT] Error al procesar la foto:', err);
+                if (typeof window.showToast === 'function') {
+                    window.showToast('❌ No se pudo procesar la foto: ' + err.message, 'error', 6000);
+                }
+                // Revertir el hueco a vacío si falló la compresión (no si falló solo el guardado:
+                // guardarProgreso ya encola offline y avisa por su cuenta en ese caso)
+                const actual = grid.querySelector(`.pd-foto-slot[data-slot="${slot}"]`);
+                if (actual && actual.classList.contains('pd-foto-slot--loading')) {
+                    const vacio = document.createElement('button');
+                    vacio.type = 'button';
+                    vacio.className = 'pd-foto-slot pd-foto-slot--empty';
+                    vacio.dataset.slot = slot;
+                    vacio.setAttribute('aria-label', 'Añadir foto ' + slot);
+                    vacio.innerHTML = `<span class="pd-foto-add-ico">📷</span>`;
+                    actual.replaceWith(vacio);
+                }
+            }
+        });
+    }
+
+    async function eliminarFoto(parteId, slot, grid, actualizarContador) {
+        if (!confirm('¿Eliminar esta foto?')) return;
+
+        const slotEl = grid.querySelector(`.pd-foto-slot[data-slot="${slot}"]`);
+        const vacio = document.createElement('button');
+        vacio.type = 'button';
+        vacio.className = 'pd-foto-slot pd-foto-slot--empty';
+        vacio.dataset.slot = slot;
+        vacio.setAttribute('aria-label', 'Añadir foto ' + slot);
+        vacio.innerHTML = `<span class="pd-foto-add-ico">📷</span>`;
+        slotEl?.replaceWith(vacio);
+        actualizarContador();
+
+        await guardarProgreso({ id: parteId, ['foto_' + slot]: '' });
+    }
+
+    /** Redimensiona y comprime una imagen en el navegador antes de subirla,
+     *  para no disparar el tamaño del registro en BD ni el tráfico offline.
+     *  Respeta la orientación EXIF cuando el navegador lo soporta. */
+    async function comprimirImagen(file, maxDim = 1280, calidad = 0.72) {
+        let bitmap = null;
+        if (typeof createImageBitmap === 'function') {
+            try {
+                bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+            } catch {
+                try { bitmap = await createImageBitmap(file); } catch { bitmap = null; }
+            }
+        }
+
+        const fuente = bitmap || await cargarImagenLegacy(file);
+        let width  = bitmap ? bitmap.width  : fuente.naturalWidth;
+        let height = bitmap ? bitmap.height : fuente.naturalHeight;
+
+        if (width > maxDim || height > maxDim) {
+            if (width >= height) {
+                height = Math.round(height * (maxDim / width));
+                width  = maxDim;
+            } else {
+                width  = Math.round(width * (maxDim / height));
+                height = maxDim;
+            }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width  = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(fuente, 0, 0, width, height);
+        if (bitmap && typeof bitmap.close === 'function') bitmap.close();
+
+        return canvas.toDataURL('image/jpeg', calidad);
+    }
+
+    /** Fallback para navegadores sin createImageBitmap: carga vía <img> + FileReader. */
+    function cargarImagenLegacy(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onerror = () => reject(new Error('No se pudo leer el archivo'));
+            reader.onload = () => {
+                const img = new Image();
+                img.onerror = () => reject(new Error('Archivo de imagen no válido'));
+                img.onload  = () => resolve(img);
+                img.src = reader.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    // ── Lightbox: ver una foto a pantalla completa ────────────────────────────
+    let lightboxEl = null;
+    function abrirLightbox(src) {
+        if (!lightboxEl) {
+            lightboxEl = document.createElement('div');
+            lightboxEl.className = 'pd-foto-lightbox';
+            lightboxEl.innerHTML = `
+                <button type="button" class="pd-foto-lightbox-close" aria-label="Cerrar">✕</button>
+                <img class="pd-foto-lightbox-img" alt="Foto ampliada">`;
+            lightboxEl.addEventListener('click', e => {
+                if (e.target === lightboxEl || e.target.closest('.pd-foto-lightbox-close')) {
+                    cerrarLightbox();
+                }
+            });
+            document.body.appendChild(lightboxEl);
+        }
+        lightboxEl.querySelector('.pd-foto-lightbox-img').src = src;
+        requestAnimationFrame(() => lightboxEl.classList.add('pd-foto-lightbox--open'));
+    }
+    function cerrarLightbox() {
+        lightboxEl?.classList.remove('pd-foto-lightbox--open');
+    }
+
     function wireNota(parteId) {
         const btn      = panel.querySelector('#pd-nota-save');
         const textarea = panel.querySelector('#pd-nota-input');
         const feedback = panel.querySelector('#pd-nota-feedback');
+        const lista    = panel.querySelector('#pd-notas-lista');
         if (!btn || !textarea) return;
 
         btn.addEventListener('click', async () => {
@@ -752,42 +1242,43 @@ const PtDetalle = (() => {
             btn.textContent = '⏳ Guardando…';
 
             const payload = { id: parteId, nota: texto };
+            const url = `${window.PT_BASE}/index.php?pt_do=nota`;
 
             try {
                 if (navigator.onLine) {
-                    const res = await fetch(
-                        `${window.PT_BASE}/index.php?pt_do=nota`,
-                        {
-                            method: 'POST',
-                            headers: {
-                                'Content-Type': 'application/json',
-                                'X-Requested-With': 'XMLHttpRequest'
-                            },
-                            body: JSON.stringify(payload)
-                        }
-                    );
+                    const res = await fetch(url, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: JSON.stringify(payload)
+                    });
                     const data = await res.json();
                     if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
 
                     showFeedback(feedback, '✅ Anotación guardada correctamente.', 'ok');
                     textarea.value = '';
-
-                    // Actualizar la nota previa en el panel sin recargar
-                    const previa = panel.querySelector('.pd-nota-previa');
-                    if (previa) {
-                        previa.innerHTML = `<span class="pd-nota-previa-lbl">Nota actual:</span>${escH(texto)}`;
-                    } else {
-                        const secBody = document.getElementById('sec-nota');
-                        secBody?.insertAdjacentHTML('afterbegin',
-                            `<div class="pd-nota-previa"><span class="pd-nota-previa-lbl">Nota actual:</span>${escH(texto)}</div>`
-                        );
-                    }
+                    lista?.querySelector('.pd-notas-vacio')?.remove();
+                    lista?.insertAdjacentHTML('afterbegin', notaItemHTML(data.nota));
                 } else {
-                    // Guardar en cola offline
-                    await PtDB.saveAccion('nota', parteId, payload,
-                        `${window.PT_BASE}/index.php?pt_do=nota`, 'POST');
-                    showFeedback(feedback, '💾 Guardado localmente. Se enviará al recuperar la conexión.', 'warn');
+                    // Sin conexión: encolar (mismo mecanismo que el resto de la app)
+                    // y mostrar la nota de inmediato con un ⏳ hasta que sincronice.
+                    if (typeof window.ptSaveAccionOffline === 'function') {
+                        await window.ptSaveAccionOffline('nota', parteId, payload, url);
+                    } else if (typeof PtDB !== 'undefined') {
+                        await PtDB.saveAccion({ tipo: 'nota', parte_id: parteId, payload, url, method: 'POST' });
+                    }
                     textarea.value = '';
+                    lista?.querySelector('.pd-notas-vacio')?.remove();
+                    lista?.insertAdjacentHTML('afterbegin', notaItemHTML({
+                        id: 'tmp-' + Date.now(),
+                        texto,
+                        autor_nombre: 'Tú',
+                        fecha: '⏳ pendiente de sincronizar',
+                        editada: false,
+                        editable: false, // no se puede editar hasta que el servidor le asigne un ID real
+                    }));
                 }
             } catch (err) {
                 showFeedback(feedback, '❌ Error: ' + err.message, 'error');
@@ -796,6 +1287,135 @@ const PtDetalle = (() => {
                 btn.textContent = '💾 Guardar anotación';
             }
         });
+    }
+
+    function notaItemHTML(n) {
+        return `
+            <div class="pd-nota-item" data-nota-id="${n.id}">
+                <div class="pd-nota-item-meta">
+                    <span class="pd-nota-item-autor">${escH(n.autor_nombre || '—')}</span>
+                    <span class="pd-nota-item-fecha">${escH(n.fecha || '')}${n.editada ? ' · editado' : ''}</span>
+                    ${n.editable ? `<button type="button" class="pd-nota-edit-btn" data-nota-id="${n.id}">✏️ Editar</button>` : ''}
+                </div>
+                <div class="pd-nota-item-texto" id="pd-nota-texto-${n.id}">${escH(n.texto)}</div>
+            </div>`;
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Edición de anotaciones propias (el técnico solo edita las suyas; el
+    // servidor vuelve a comprobar la autoría antes de guardar el cambio)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    function wireNotas(parteId) {
+        const lista = panel.querySelector('#pd-notas-lista');
+        if (!lista) return;
+
+        lista.addEventListener('click', e => {
+            const editBtn = e.target.closest('.pd-nota-edit-btn');
+            if (editBtn) {
+                iniciarEdicionNota(editBtn.dataset.notaId);
+                return;
+            }
+            const saveBtn = e.target.closest('.pd-nota-edit-save');
+            if (saveBtn) {
+                guardarEdicionNota(parteId, saveBtn.dataset.notaId);
+                return;
+            }
+            const cancelBtn = e.target.closest('.pd-nota-edit-cancel');
+            if (cancelBtn) {
+                cancelarEdicionNota(cancelBtn.dataset.notaId);
+            }
+        });
+    }
+
+    function iniciarEdicionNota(notaId) {
+        const item = panel.querySelector(`.pd-nota-item[data-nota-id="${notaId}"]`);
+        const textoEl = document.getElementById(`pd-nota-texto-${notaId}`);
+        if (!item || !textoEl) return;
+        if (item.classList.contains('pd-nota-item--editando')) return; // ya está editando
+
+        item.dataset.textoOriginal = textoEl.textContent;
+        item.classList.add('pd-nota-item--editando');
+        textoEl.outerHTML = `
+            <div class="pd-nota-edit-wrap" id="pd-nota-texto-${notaId}">
+                <textarea class="pd-textarea pd-nota-edit-textarea" rows="3">${escH(item.dataset.textoOriginal)}</textarea>
+                <div class="pd-nota-edit-actions">
+                    <button type="button" class="pd-nota-edit-save" data-nota-id="${notaId}">💾 Guardar</button>
+                    <button type="button" class="pd-nota-edit-cancel" data-nota-id="${notaId}">Cancelar</button>
+                </div>
+                <div class="pd-nota-edit-feedback"></div>
+            </div>`;
+        item.querySelector('.pd-nota-edit-textarea')?.focus();
+    }
+
+    function cancelarEdicionNota(notaId) {
+        const item = panel.querySelector(`.pd-nota-item[data-nota-id="${notaId}"]`);
+        const wrap = document.getElementById(`pd-nota-texto-${notaId}`);
+        if (!item || !wrap) return;
+        wrap.outerHTML = `<div class="pd-nota-item-texto" id="pd-nota-texto-${notaId}">${escH(item.dataset.textoOriginal || '')}</div>`;
+        item.classList.remove('pd-nota-item--editando');
+    }
+
+    async function guardarEdicionNota(parteId, notaId) {
+        const item = panel.querySelector(`.pd-nota-item[data-nota-id="${notaId}"]`);
+        const wrap = document.getElementById(`pd-nota-texto-${notaId}`);
+        if (!item || !wrap) return;
+
+        const textarea = wrap.querySelector('.pd-nota-edit-textarea');
+        const saveBtn   = wrap.querySelector('.pd-nota-edit-save');
+        const feedback  = wrap.querySelector('.pd-nota-edit-feedback');
+        const texto = textarea.value.trim();
+
+        if (!texto) {
+            feedback.textContent = '⚠️ La anotación no puede quedar vacía.';
+            feedback.className   = 'pd-nota-edit-feedback pd-feedback--warn';
+            return;
+        }
+
+        saveBtn.disabled    = true;
+        saveBtn.textContent = '⏳ Guardando…';
+
+        const payload = { id_nota: notaId, nota: texto };
+        const url = `${window.PT_BASE}/index.php?pt_do=editar_nota`;
+
+        try {
+            if (navigator.onLine) {
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
+
+                item.dataset.textoOriginal = texto;
+                wrap.outerHTML = `<div class="pd-nota-item-texto" id="pd-nota-texto-${notaId}">${escH(texto)}</div>`;
+                item.classList.remove('pd-nota-item--editando');
+
+                // Marcar como editada en la cabecera de la nota
+                const fechaEl = item.querySelector('.pd-nota-item-fecha');
+                if (fechaEl && !fechaEl.textContent.includes('editado')) {
+                    fechaEl.textContent += ' · editado';
+                }
+                if (typeof window.showToast === 'function') {
+                    window.showToast('✅ Anotación actualizada', 'success');
+                }
+            } else {
+                if (typeof window.ptSaveAccionOffline === 'function') {
+                    await window.ptSaveAccionOffline('editar_nota', notaId, payload, url);
+                } else if (typeof PtDB !== 'undefined') {
+                    await PtDB.saveAccion({ tipo: 'editar_nota', parte_id: notaId, payload, url, method: 'POST' });
+                }
+                item.dataset.textoOriginal = texto;
+                wrap.outerHTML = `<div class="pd-nota-item-texto" id="pd-nota-texto-${notaId}">${escH(texto)}</div>`;
+                item.classList.remove('pd-nota-item--editando');
+            }
+        } catch (err) {
+            feedback.textContent = '❌ Error: ' + err.message;
+            feedback.className   = 'pd-nota-edit-feedback pd-feedback--error';
+            saveBtn.disabled    = false;
+            saveBtn.textContent = '💾 Guardar';
+        }
     }
 
     function showFeedback(el, msg, type) {

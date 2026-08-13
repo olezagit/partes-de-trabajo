@@ -87,7 +87,11 @@ $sql .= "  ef.firma_cliente, ef.firma_tecnico,
 ";
 $sql .= "  ef.nombre_firmante, ef.dni_firmante, ef.fecha_firma,
 ";
-$sql .= "  ef.horadeinicio, ef.horadefinalizacion";
+$sql .= "  ef.horadeinicio, ef.horadefinalizacion,
+";
+$sql .= "  ef.foto_1, ef.foto_2, ef.foto_3, ef.foto_4, ef.foto_5,
+";
+$sql .= "  ef.foto_6, ef.foto_7, ef.foto_8, ef.foto_9, ef.foto_10";
 $sql .= " FROM ".MAIN_DB_PREFIX."commande c";
 $sql .= " INNER JOIN ".MAIN_DB_PREFIX."societe s           ON s.rowid  = c.fk_soc";
 $sql .= " LEFT  JOIN ".MAIN_DB_PREFIX."societe_address sa  ON sa.rowid = c.fk_delivery_address";
@@ -149,9 +153,21 @@ $tipoId   = (int)$c->tipo_albaran;
 $tipoInfo = $tipos[$tipoId] ?? array('label' => 'Tipo '.$tipoId, 'color' => '#6B7280', 'bg' => '#F3F4F6', 'icon' => '📄');
 
 // ── Líneas del pedido ─────────────────────────────────────────────────────────
+// Columnas de "ficha técnica" por producto (llx_commandedet_extrafields):
+// se generan a partir del metadato compartido para no listarlas a mano dos veces.
+$camposLineaExtra = include __DIR__.'/../inc/campos_linea_extra.php';
+$colsFicha = array();
+foreach (array('global', 'pm', 'man') as $grp) {
+    foreach ($camposLineaExtra[$grp] as $campo) {
+        if (isset($campo['name'])) $colsFicha[] = $campo['name'];
+    }
+}
+$selectFicha = implode(', ', array_map(function ($nombreCol) { return 'cdef.'.$nombreCol; }, $colsFicha));
+
 $sql2  = "SELECT cd.rowid, cd.rang, cd.description, cd.label, cd.qty,";
 $sql2 .= "  u.short_label AS unidad, p.ref AS prod_ref, p.label AS prod_label,";
 $sql2 .= "  cdef.tarea_realizada";
+$sql2 .= ($selectFicha !== '' ? ", ".$selectFicha : "");
 $sql2 .= " FROM ".MAIN_DB_PREFIX."commandedet cd";
 $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."c_units u  ON u.rowid  = cd.fk_unit";
 $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."product  p  ON p.rowid  = cd.fk_product";
@@ -169,6 +185,28 @@ if ($resql2) {
         // Eliminar líneas vacías múltiples que quedan tras el strip_tags
         $clean_desc  = preg_replace('/\n{3,}/', "\n\n", $clean_desc);
 
+        // Ficha técnica: valores ya guardados de cada campo (boolean→bool real,
+        // multiselect→array, resto tal cual)
+        $ficha = array();
+        foreach ($colsFicha as $nombreCol) {
+            $val = $ln->$nombreCol ?? null;
+            $tipoCol = null;
+            foreach (array('pm', 'man', 'global') as $grp) {
+                foreach ($camposLineaExtra[$grp] as $campo) {
+                    if (($campo['name'] ?? '') === $nombreCol) $tipoCol = $campo['type'];
+                }
+            }
+            if ($tipoCol === 'boolean') {
+                $ficha[$nombreCol] = !empty($val);
+            } elseif ($tipoCol === 'multiselect') {
+                $ficha[$nombreCol] = ($val !== null && $val !== '')
+                    ? array_values(array_map('trim', explode(',', $val)))
+                    : array();
+            } else {
+                $ficha[$nombreCol] = $val ?? '';
+            }
+        }
+
         $lineas[] = array(
             'rowid'           => (int)$ln->rowid,
             'label'           => $clean_label,
@@ -177,9 +215,40 @@ if ($resql2) {
             'qty'             => (float)$ln->qty,
             'unidad'          => $ln->unidad,
             'tarea_realizada' => !empty($ln->tarea_realizada),
+            'ficha'           => $ficha,
         );
     }
     $db->free($resql2);
+}
+
+// ── Anotaciones estructuradas (llx_partes_notas) ─────────────────────────────
+// Cada anotación es una fila independiente con su autor; 'editable' indica si
+// la puede editar el usuario actual (solo el autor puede editar la suya).
+$sqlNotas  = "SELECT pn.rowid, pn.nota, pn.fk_user, pn.date_creation, pn.date_modif,";
+$sqlNotas .= "  u.firstname, u.lastname, u.login";
+$sqlNotas .= " FROM ".MAIN_DB_PREFIX."partes_notas pn";
+$sqlNotas .= " LEFT JOIN ".MAIN_DB_PREFIX."user u ON u.rowid = pn.fk_user";
+$sqlNotas .= " WHERE pn.fk_commande = ".$parteId;
+$sqlNotas .= "   AND pn.entity = ".(int)$conf->entity;
+$sqlNotas .= " ORDER BY pn.date_creation DESC";
+
+$resNotas = $db->query($sqlNotas);
+$notas = array();
+if ($resNotas) {
+    while ($n = $db->fetch_object($resNotas)) {
+        $nombreAutor = trim(($n->firstname ?? '').' '.($n->lastname ?? '')) ?: ($n->login ?? '');
+        $notas[] = array(
+            'id'           => (int)$n->rowid,
+            'texto'        => $n->nota,
+            'autor_id'     => (int)$n->fk_user,
+            'autor_nombre' => $nombreAutor,
+            'fecha'        => $n->date_creation ? dol_print_date($db->jdate($n->date_creation), 'dayhour') : '',
+            'fecha_modif'  => $n->date_modif    ? dol_print_date($db->jdate($n->date_modif),    'dayhour') : '',
+            'editada'      => !empty($n->date_modif),
+            'editable'     => ((int)$n->fk_user === $userId),
+        );
+    }
+    $db->free($resNotas);
 }
 
 // ── Resolver teléfono y dirección con prioridad clara ───────────────────────────
@@ -258,6 +327,10 @@ echo json_encode(array(
         'fecha_firma'      => $c->fecha_firma      ?? '',
         'horadeinicio'     => $c->horadeinicio     ?? '',
         'horadefin'        => $c->horadefinalizacion ?? '',
+        'fotos'            => array(
+            $c->foto_1  ?? '', $c->foto_2  ?? '', $c->foto_3  ?? '', $c->foto_4  ?? '', $c->foto_5  ?? '',
+            $c->foto_6  ?? '', $c->foto_7  ?? '', $c->foto_8  ?? '', $c->foto_9  ?? '', $c->foto_10 ?? '',
+        ),
     ),
     'cliente' => array(
         'soc_id'  => (int)$c->soc_id,
@@ -283,5 +356,6 @@ echo json_encode(array(
         'maps_address'=> $dir_maps,
     ),
     'lineas' => $lineas,
+    'notas'  => $notas,
     'ts'     => time(),
 ), JSON_UNESCAPED_UNICODE);

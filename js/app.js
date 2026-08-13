@@ -269,11 +269,14 @@ function buildCardHTML(p) {
     const fecha = p.date_commande
         ? new Date(p.date_commande * 1000).toLocaleDateString('es-ES')
         : '—';
+    const fechaISO = p.date_commande
+        ? new Date(p.date_commande * 1000).toISOString().slice(0, 10)
+        : '';
 
     const url = p.url || `/commande/card.php?id=${p.rowid}`;
 
     return `
-    <div class="pt-card" role="button" tabindex="0" data-tipo="${escapeHTML(tipoInfo.label)}" data-estado="${escapeHTML(stInfo.label)}" data-statut="${statutVisual}" data-cliente="${escapeHTML(p.soc_nom||"")}" data-ref="${escapeHTML(p.ref||"")}" data-refcli="${escapeHTML(p.ref_client||"")}" data-id="${p.rowid}" data-firmado="${p.firmado ? '1' : '0'}" data-url="${escapeHTML(url)}">
+    <div class="pt-card" role="button" tabindex="0" data-tipo="${escapeHTML(tipoInfo.label)}" data-estado="${escapeHTML(stInfo.label)}" data-statut="${statutVisual}" data-cliente="${escapeHTML(p.soc_nom||"")}" data-ref="${escapeHTML(p.ref||"")}" data-refcli="${escapeHTML(p.ref_client||"")}" data-fecha="${fechaISO}" data-direccion="${escapeHTML(direccion)}" data-localidad="${escapeHTML(localidad)}" data-id="${p.rowid}" data-firmado="${p.firmado ? '1' : '0'}" data-url="${escapeHTML(url)}">
       <div class="pt-card-top">
         <span class="pt-tipo-badge" style="color:${tipoInfo.color};background:${tipoInfo.bg}">
           ${tipoInfo.icon} ${escapeHTML(tipoInfo.label)}

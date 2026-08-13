@@ -1,9 +1,12 @@
 <?php
 /**
  * api/guardar_nota.php
- * Añade una anotación a la nota pública del pedido (llx_commande.note_public).
- * La nueva anotación se añade al principio con fecha y hora.
- * Llamado via: index.php?action=nota  (POST, JSON body: {id, nota})
+ * Crea una NUEVA anotación estructurada (llx_partes_notas) para el parte.
+ * A diferencia del modelo anterior, cada anotación queda como una fila propia
+ * con su autor y fecha, de forma que el propio técnico pueda editarla después
+ * (ver api/editar_nota.php). El histórico antiguo en note_public NO se toca.
+ *
+ * Llamado via: index.php?pt_do=nota  (POST, JSON body: {id, nota})
  */
 
 if (!defined('PT_FROM_DISPATCHER')) {
@@ -25,8 +28,8 @@ if ($parteId <= 0 || $nota === '') {
 
 $userId = (int)$user->id;
 
-// Verificar que el usuario tiene acceso a este parte
-$sqlCheck  = "SELECT DISTINCT c.rowid, c.note_public";
+// Verificar que el usuario tiene acceso a este parte (asignado como técnico)
+$sqlCheck  = "SELECT DISTINCT c.rowid";
 $sqlCheck .= " FROM ".MAIN_DB_PREFIX."commande c";
 $sqlCheck .= " INNER JOIN ".MAIN_DB_PREFIX."actioncomm ac";
 $sqlCheck .= "   ON ac.fk_element = c.rowid AND ac.elementtype = 'order'";
@@ -42,34 +45,40 @@ if (!$resql || $db->num_rows($resql) === 0) {
     http_response_code(403);
     die(json_encode(['error' => 'Sin acceso a este parte']));
 }
-$parte = $db->fetch_object($resql);
 $db->free($resql);
 
-// Construir nueva nota: [fecha hora] usuario: texto + nota anterior
-$fecha   = date('d/m/Y H:i');
-$userObj = new User($db);
-$userObj->fetch($userId);
-$nombreUser = trim($userObj->firstname.' '.$userObj->lastname) ?: $userObj->login;
+// Insertar la nueva anotación como fila propia
+$sqlInsert  = "INSERT INTO ".MAIN_DB_PREFIX."partes_notas";
+$sqlInsert .= " (fk_commande, fk_user, nota, date_creation, entity)";
+$sqlInsert .= " VALUES (";
+$sqlInsert .= "  ".$parteId.",";
+$sqlInsert .= "  ".$userId.",";
+$sqlInsert .= "  '".$db->escape($nota)."',";
+$sqlInsert .= "  NOW(),";
+$sqlInsert .= "  ".(int)$conf->entity;
+$sqlInsert .= " )";
 
-$nuevaNota = "[$fecha - $nombreUser]\n$nota";
-if (!empty($parte->note_public)) {
-    $nuevaNota .= "\n\n" . $parte->note_public;
-}
-
-// Guardar
-$sqlUpdate = "UPDATE ".MAIN_DB_PREFIX."commande";
-$sqlUpdate .= " SET note_public = '".$db->escape($nuevaNota)."'";
-$sqlUpdate .= ", tms = NOW()";
-$sqlUpdate .= " WHERE rowid = ".$parteId;
-
-$resUpdate = $db->query($sqlUpdate);
-if (!$resUpdate) {
+$resInsert = $db->query($sqlInsert);
+if (!$resInsert) {
     http_response_code(500);
     die(json_encode(['error' => 'Error al guardar: '.$db->lasterror()]));
 }
 
+$notaId = $db->last_insert_id(MAIN_DB_PREFIX."partes_notas");
+
+$userObj = new User($db);
+$userObj->fetch($userId);
+$nombreUser = trim($userObj->firstname.' '.$userObj->lastname) ?: $userObj->login;
+
 echo json_encode([
-    'ok'         => true,
-    'note_public'=> $nuevaNota,
-    'ts'         => time(),
+    'ok'    => true,
+    'nota'  => [
+        'id'            => (int)$notaId,
+        'texto'         => $nota,
+        'autor_id'      => $userId,
+        'autor_nombre'  => $nombreUser,
+        'fecha'         => date('d/m/Y H:i'),
+        'editada'       => false,
+        'editable'      => true,
+    ],
 ]);

@@ -63,6 +63,8 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])
             require __DIR__.'/api/parte_detalle.php';
         } elseif ($pt_action === 'nota') {
             require __DIR__.'/api/guardar_nota.php';
+        } elseif ($pt_action === 'editar_nota') {
+            require __DIR__.'/api/editar_nota.php';
         } elseif ($pt_action === 'terminar') {
             require __DIR__.'/api/terminar_parte.php';
         } elseif ($pt_action === 'usuarios') {
@@ -77,6 +79,8 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])
             require __DIR__.'/api/guardar_progreso.php';
         } elseif ($pt_action === 'tarea') {
             require __DIR__.'/api/marcar_tarea.php';
+        } elseif ($pt_action === 'linea_ficha') {
+            require __DIR__.'/api/guardar_linea_extrafields.php';
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Accion desconocida: '.htmlspecialchars($pt_action)]);
@@ -237,6 +241,48 @@ if ($resql) {
     dol_print_error($db);
 }
 
+// ─── Pre-cálculo de dirección/localidad por parte ──────────────────────────────
+// Misma prioridad que el detalle: 1) contacto asignado al pedido, 2) sede de
+// entrega, 3) central del cliente. Se calcula UNA vez aquí y se reutiliza tanto
+// para los desplegables de filtro (tercero/localidad) como para las fichas,
+// en vez de repetir la consulta de contacto fila por fila más abajo.
+$tercerosVistos    = array(); // soc_nom => true (dedup, orden alfabético al final)
+$localidadesVistas = array();
+foreach ($partes as $obj) {
+    $dir_contacto = ''; $loc_contacto = '';
+    $sqlCt  = "SELECT ct.address, ct.zip, ct.town";
+    $sqlCt .= " FROM ".MAIN_DB_PREFIX."element_contact ec";
+    $sqlCt .= " INNER JOIN ".MAIN_DB_PREFIX."socpeople ct ON ct.rowid = ec.fk_socpeople";
+    $sqlCt .= " INNER JOIN ".MAIN_DB_PREFIX."c_type_contact ctc ON ctc.rowid = ec.fk_c_type_contact";
+    $sqlCt .= " WHERE ec.element_id = ".(int)$obj->rowid." AND ctc.element = 'commande'";
+    $sqlCt .= "   AND (ct.address != '' OR ct.town != '') LIMIT 1";
+    $resCt = $db->query($sqlCt);
+    if ($resCt && $db->num_rows($resCt) > 0) {
+        $ctRow = $db->fetch_object($resCt);
+        $dir_contacto = trim($ctRow->address ?? '');
+        $loc_contacto = trim(($ctRow->zip ? $ctRow->zip.' ' : '').($ctRow->town ?? ''));
+        $db->free($resCt);
+    }
+
+    if ($dir_contacto !== '') {
+        $obj->direccion = $dir_contacto;
+        $obj->localidad = $loc_contacto;
+    } elseif (!empty($obj->dep_address)) {
+        $obj->direccion = $obj->dep_address;
+        $obj->localidad = trim(($obj->dep_zip ? $obj->dep_zip.' ' : '').$obj->dep_town);
+    } else {
+        $obj->direccion = $obj->soc_address;
+        $obj->localidad = trim(($obj->soc_zip ? $obj->soc_zip.' ' : '').$obj->soc_town);
+    }
+
+    if (!empty($obj->soc_nom))    $tercerosVistos[$obj->soc_nom]       = true;
+    if (!empty($obj->localidad))  $localidadesVistas[$obj->localidad]  = true;
+}
+$tercerosDistintos    = array_keys($tercerosVistos);
+$localidadesDistintas = array_keys($localidadesVistas);
+sort($tercerosDistintos,    SORT_STRING | SORT_FLAG_CASE);
+sort($localidadesDistintas, SORT_STRING | SORT_FLAG_CASE);
+
 // ─── HTML ─────────────────────────────────────────────────────────────────────
 // CSS y JS inyectados directo en <head> via moreheadcontent.
 // NO usar los parámetros arrayofjs/arrayofcss de llxHeader: no son fiables en todas las versiones.
@@ -245,7 +291,7 @@ if ($resql) {
 // DOL_URL_ROOT puede no incluir /htdocs/ dependiendo de la version/configuracion.
 $pt_self = dirname($_SERVER['PHP_SELF']);  // ej: /gestion/htdocs/custom/partes_trabajo
 $pt_base = rtrim($pt_self, '/');           // sin barra final
-$pt_v    = '?v=7.1'; // cache-busting: incrementar al desplegar cambios
+$pt_v    = '?v=8.0'; // cache-busting: incrementar al desplegar cambios (v8.0: tuberias en pulgadas + cabecera empresa PDF)
 
 $moreheadcontent  = '<link rel="manifest" href="'.$pt_base.'/manifest.json">'."\n";
 $moreheadcontent .= '<meta name="theme-color" content="#0F172A">'."\n";
@@ -256,6 +302,8 @@ $moreheadcontent .= '<link rel="apple-touch-icon" href="'.$pt_base.'/icons/icon-
 // CSS del modulo
 $moreheadcontent .= '<link rel="stylesheet" href="'.$pt_base.'/css/partes.css'.$pt_v.'">'."\n";
 $moreheadcontent .= '<link rel="stylesheet" href="'.$pt_base.'/css/detalle.css'.$pt_v.'">'."\n";
+// Select2 (autoalojado, no CDN, para que funcione tambien offline)
+$moreheadcontent .= '<link rel="stylesheet" href="'.$pt_base.'/css/vendor/select2.min.css'.$pt_v.'">'."\n";
 // Variables PHP a JS (antes que los scripts)
 $moreheadcontent .= '<script>'."
 ";
@@ -266,6 +314,9 @@ $moreheadcontent .= '  window.PT_BASE    = "' . $pt_base . '";'."
 $moreheadcontent .= '  window.PT_USER_ID = ' . (int)$user->id . ';'."
 ";
 $moreheadcontent .= '  window.PT_ES_ADMIN = ' . ($esAdmin ? 'true' : 'false') . ';'."
+";
+// Metadatos de la ficha técnica por producto (única fuente de verdad, ver inc/campos_linea_extra.php)
+$moreheadcontent .= '  window.PT_CAMPOS_LINEA = ' . json_encode(include __DIR__.'/inc/campos_linea_extra.php', JSON_UNESCAPED_UNICODE) . ';'."
 ";
 // Desregistrar TODOS los SW del dominio al cargar — evita conflicto con SW de otros modulos Dolibarr
 $moreheadcontent .= '  if ("serviceWorker" in navigator) {'."
@@ -284,6 +335,10 @@ $moreheadcontent .= '</script>'."
 $moreheadcontent .= '<script defer src="'.$pt_base.'/js/db.js'.$pt_v.'"></script>'."\n";
 $moreheadcontent .= '<script defer src="'.$pt_base.'/js/app.js'.$pt_v.'"></script>'."\n";
 $moreheadcontent .= '<script defer src="'.$pt_base.'/js/detalle.js'.$pt_v.'"></script>'."\n";
+// Select2 (autoalojado): combobox buscables para Tercero/Localidad. Requiere
+// que Dolibarr ya tenga jQuery cargado (siempre lo hace en el core del tema).
+$moreheadcontent .= '<script defer src="'.$pt_base.'/js/vendor/select2.min.js'.$pt_v.'"></script>'."\n";
+$moreheadcontent .= '<script defer src="'.$pt_base.'/js/vendor/select2.es.js'.$pt_v.'"></script>'."\n";
 $moreheadcontent .= '<script defer src="'.$pt_base.'/js/admin.js'.$pt_v.'"></script>'."
 ";
 
@@ -326,24 +381,64 @@ print '</div>';
 print '<div class="pt-filtros-wrap">';
 print '  <form id="pt-filtro-bar" class="pt-filtro-bar" onsubmit="return false">';
 
-// Filtro tipo
-print '  <select id="ft-tipo" class="pt-filtro-select">';
-print '    <option value="">🏷 Tipo</option>';
+// Filtro tipo — checkboxes (permite marcar varios tipos a la vez)
+print '  <div class="pt-filtro-tipo-wrap" id="pt-filtro-tipo-wrap">';
+print '    <button type="button" id="ft-tipo-btn" class="pt-filtro-select pt-filtro-tipo-btn">';
+print '      <span id="ft-tipo-btn-label">🏷 Tipo</span>';
+print '    </button>';
+print '    <div class="pt-filtro-tipo-panel" id="ft-tipo-panel">';
 foreach ($tipos as $tId => $tData) {
-    print '    <option value="'.htmlspecialchars($tData['label']).'">'.htmlspecialchars($tData['icon']).' '.htmlspecialchars($tData['label']).'</option>';
+    print '      <label class="pt-filtro-tipo-opt">';
+    print '        <input type="checkbox" class="ft-tipo-check" value="'.htmlspecialchars($tData['label']).'">';
+    print '        <span>'.htmlspecialchars($tData['icon']).' '.htmlspecialchars($tData['label']).'</span>';
+    print '      </label>';
 }
-print '  </select>';
+print '    </div>';
+print '  </div>';
 
-// Filtro estado — admins ven todos; técnicos solo los activos
+// Filtro estado — admins ven todos (con "Validado" preseleccionado); técnicos solo los activos
 print '  <select id="ft-estado" class="pt-filtro-select">';
 print '    <option value="">📊 Estado</option>';
 foreach ($statusLabels as $sId => $sData) {
     if ($esAdmin || in_array($sId, $statuts_activos)) {
         $icons = array(-1=>'🔴', 0=>'⚪', 1=>'🔵', 2=>'🟢', 3=>'🟣');
         $icon  = isset($icons[$sId]) ? $icons[$sId] : '';
-        print '    <option value="'.htmlspecialchars($sData['label']).'">' . $icon . ' ' . htmlspecialchars($sData['label']) . '</option>';
+        // Para el grupo ADMINISTRACIÓN, "Validado" (statut=1) queda seleccionado por defecto al cargar la página
+        $selAttr = ($esAdmin && $sId === 1) ? ' selected="selected"' : '';
+        print '    <option value="'.htmlspecialchars($sData['label']).'"'.$selAttr.'>' . $icon . ' ' . htmlspecialchars($sData['label']) . '</option>';
     }
 }
+print '  </select>';
+
+// Filtro tercero (cliente) — lista de terceros con partes actualmente cargados
+print '  <select id="ft-tercero" class="pt-filtro-select">';
+print '    <option value="">🏢 Tercero</option>';
+foreach ($tercerosDistintos as $tercero) {
+    print '    <option value="'.htmlspecialchars($tercero).'">'.htmlspecialchars($tercero).'</option>';
+}
+print '  </select>';
+
+// Filtro localidad — lista de localidades resueltas (contacto → sede → central)
+print '  <select id="ft-localidad" class="pt-filtro-select">';
+print '    <option value="">📍 Localidad</option>';
+foreach ($localidadesDistintas as $localidadOpt) {
+    print '    <option value="'.htmlspecialchars($localidadOpt).'">'.htmlspecialchars($localidadOpt).'</option>';
+}
+print '  </select>';
+
+// Filtro de fechas — por defecto: 1 de enero del año actual hasta hoy
+$pt_fecha_desde_def = date('Y-01-01');
+$pt_fecha_hasta_def = date('Y-m-d');
+print '  <div class="pt-filtro-fechas">';
+print '    <input type="date" id="ft-fecha-desde" class="pt-filtro-fecha" value="'.htmlspecialchars($pt_fecha_desde_def).'" title="Desde">';
+print '    <span class="pt-filtro-fecha-sep">–</span>';
+print '    <input type="date" id="ft-fecha-hasta" class="pt-filtro-fecha" value="'.htmlspecialchars($pt_fecha_hasta_def).'" title="Hasta">';
+print '  </div>';
+
+// Orden por fecha: Ascendente / Descendente (por defecto, más recientes primero)
+print '  <select id="ft-orden" class="pt-filtro-select">';
+print '    <option value="desc">⬇️ Más recientes primero</option>';
+print '    <option value="asc">⬆️ Más antiguos primero</option>';
 print '  </select>';
 
 // Buscador unificado: filtra por cliente, ref y ref_client simultáneamente
@@ -413,36 +508,13 @@ if (empty($partes)) {
             ? $tipos[$tipoKey]
             : array('label' => 'Tipo '.$tipoKey, 'color' => '#6B7280', 'bg' => '#F3F4F6', 'icon' => '📄');
 
-        // Dirección con la misma prioridad que el detalle:
-        // 1. Contacto asignado  2. Sede del pedido  3. Central del cliente
-        $dir_contacto_card = '';
-        $loc_contacto_card = '';
-        $sqlCt  = "SELECT ct.address, ct.zip, ct.town";
-        $sqlCt .= " FROM ".MAIN_DB_PREFIX."element_contact ec";
-        $sqlCt .= " INNER JOIN ".MAIN_DB_PREFIX."socpeople ct ON ct.rowid = ec.fk_socpeople";
-        $sqlCt .= " INNER JOIN ".MAIN_DB_PREFIX."c_type_contact ctc ON ctc.rowid = ec.fk_c_type_contact";
-        $sqlCt .= " WHERE ec.element_id = ".(int)$obj->rowid." AND ctc.element = 'commande'";
-        $sqlCt .= "   AND (ct.address != '' OR ct.town != '') LIMIT 1";
-        $resCt = $db->query($sqlCt);
-        if ($resCt && $db->num_rows($resCt) > 0) {
-            $ctRow = $db->fetch_object($resCt);
-            $dir_contacto_card = trim($ctRow->address ?? '');
-            $loc_contacto_card = trim(($ctRow->zip ? $ctRow->zip.' ' : '').($ctRow->town ?? ''));
-            $db->free($resCt);
-        }
+        // Dirección/localidad ya resueltas en el pre-cálculo de arriba
+        // (misma prioridad: contacto asignado → sede de entrega → central del cliente)
+        $direccion = $obj->direccion;
+        $localidad = $obj->localidad;
 
-        if ($dir_contacto_card !== '') {
-            $direccion = $dir_contacto_card;
-            $localidad = $loc_contacto_card;
-        } elseif (!empty($obj->dep_address)) {
-            $direccion = $obj->dep_address;
-            $localidad = trim(($obj->dep_zip ? $obj->dep_zip.' ' : '').$obj->dep_town);
-        } else {
-            $direccion = $obj->soc_address;
-            $localidad = trim(($obj->soc_zip ? $obj->soc_zip.' ' : '').$obj->soc_town);
-        }
-
-        $fecha  = dol_print_date($db->jdate($obj->date_commande), 'day');
+        $fecha    = dol_print_date($db->jdate($obj->date_commande), 'day');
+        $fechaISO = date('Y-m-d', $db->jdate($obj->date_commande));
         if ($enProceso) {
             $stInfo = $enProcesoLabel;
         } else {
@@ -462,6 +534,9 @@ if (empty($partes)) {
             .' data-cliente="'.htmlspecialchars($obj->soc_nom).'"'
             .' data-ref="'.htmlspecialchars($obj->ref).'"'
             .' data-refcli="'.htmlspecialchars($obj->ref_client ?? '').'"'
+            .' data-fecha="'.htmlspecialchars($fechaISO).'"'
+            .' data-direccion="'.htmlspecialchars($direccion ?? '').'"'
+            .' data-localidad="'.htmlspecialchars($localidad ?? '').'"'
             .' data-firmado="'.($firmado ? '1' : '0').'"'
             .' data-url="'.htmlspecialchars($url).'">';
         print '  <div class="pt-card-top">';

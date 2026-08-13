@@ -185,12 +185,32 @@ try {
     } else {
         $pdfErrorMsg = 'No se pudo cargar el pedido ID '.$parteId;
     }
-} catch (Exception $e) {
+} catch (Throwable $e) {
     $pdfErrorMsg = 'Excepción al generar PDF: '.$e->getMessage();
 }
 
 if (!$pdfGenerado) {
     error_log('PartesTrabajo: error generando PDF para commande '.$parteId.': '.$pdfErrorMsg);
+}
+
+// ── PDF de ficha técnica por producto ────────────────────────────────────────
+// Un PDF por cada línea del pedido que tenga algún dato de ficha técnica
+// relleno (marca/modelo/nº serie/campos pm_ o man_ según el tipo de albarán).
+// Es independiente del PDF principal: si falla, no impide cerrar el parte.
+$fichasResultado = array('ok' => false, 'generados' => 0, 'errores' => array());
+try {
+    require_once __DIR__.'/../inc/generar_ficha_pdf.php';
+    $refParaFichas = isset($objCommande) && is_object($objCommande) ? $objCommande->ref : '';
+    $nombreTecnicoFicha = trim(($user->firstname ?? '').' '.($user->lastname ?? '')) ?: ($user->login ?? '');
+    if ($refParaFichas !== '') {
+        $fichasResultado = pt_generar_fichas_pdf_producto(
+            $db, $conf, $langs, $mysoc, $parteId, $refParaFichas,
+            $nombreTecnicoFicha, $firmaTecnico
+        );
+    }
+} catch (Throwable $eFichas) {
+    error_log('PartesTrabajo: error generando fichas técnicas PDF para commande '.$parteId.': '.$eFichas->getMessage());
+    $fichasResultado['errores'][] = $eFichas->getMessage();
 }
 
 // ── Envío de correos ─────────────────────────────────────────────────────────
@@ -357,6 +377,8 @@ echo json_encode([
     'pdf_generado'   => $pdfGenerado,
     'pdf_encontrado' => isset($tienePdf) ? $tienePdf   : false,
     'pdf_nombre'     => isset($pdfName)  ? $pdfName    : '',
+    'fichas_pdf_generadas' => $fichasResultado['generados'],
+    'fichas_pdf_errores'   => $fichasResultado['errores'],
     'correo_admin'   => isset($objMail),
     'correo_cliente' => isset($objMail) && isset($enviarOk) && $enviarOk
                         && isset($emailCliente) && $emailCliente !== ''

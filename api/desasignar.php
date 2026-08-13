@@ -40,8 +40,9 @@ foreach ($acIds as $acId) {
     $sqlDel .= " WHERE fk_actioncomm = ".$acId;
     $sqlDel .= "   AND element_type  = 'user'";
     $sqlDel .= "   AND fk_element    = ".$targetUserId;
-    if ($db->query($sqlDel)) {
-        $deleted += $db->affected_rows();
+    $resDel = $db->query($sqlDel);
+    if ($resDel) {
+        $deleted += $db->affected_rows($resDel);
     }
 }
 

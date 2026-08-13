@@ -2,14 +2,15 @@
 /**
  * api/guardar_progreso.php
  * Guarda de forma incremental cualquier campo del progreso del parte
- * (firma del técnico, firma del cliente, nombre/dni del firmante, horas)
+ * (firma del técnico, firma del cliente, nombre/dni del firmante, horas,
+ * fotos del trabajo realizado — foto_1..foto_10)
  * SIN cambiar fk_statut ni exigir que estén todos los campos.
  * Así, si el técnico sale del albarán antes de terminarlo, lo que ya
  * confirmó queda guardado en BD y se recupera al volver a abrirlo.
  *
  * POST JSON: { id: int, ...campos opcionales }
  *   firma_tecnico, firma_cliente, nombre_cliente, dni_cliente,
- *   horadeinicio, horadefin
+ *   horadeinicio, horadefin, foto_1..foto_10 (dataURL base64 o '' para borrar)
  */
 
 if (!defined('PT_FROM_DISPATCHER')) {
@@ -66,11 +67,21 @@ $camposPermitidos = array(
     'horadeinicio'   => 'horadeinicio',
     'horadefin'      => 'horadefinalizacion',
 );
+// Fotos del trabajo: foto_1..foto_10 (dataURL base64, o '' para eliminar la foto)
+for ($i = 1; $i <= 10; $i++) {
+    $camposPermitidos['foto_'.$i] = 'foto_'.$i;
+}
 
 $updates = array();
 foreach ($camposPermitidos as $payloadKey => $columna) {
     if (array_key_exists($payloadKey, $data)) {
         $valor = (string)$data[$payloadKey];
+        // Límite de seguridad: ~8MB en base64 por foto (de sobra para una foto
+        // ya comprimida en el navegador, que normalmente pesa unos cientos de KB)
+        if (strpos($payloadKey, 'foto_') === 0 && strlen($valor) > 8 * 1024 * 1024) {
+            http_response_code(400);
+            die(json_encode(['error' => 'La foto "'.$payloadKey.'" es demasiado grande']));
+        }
         $updates[$columna] = $valor;
     }
 }

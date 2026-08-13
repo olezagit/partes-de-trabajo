@@ -606,6 +606,93 @@
     border-color: var(--pt-accent);
 }
 
+/* ── Filtro Tipo: botón + popover de checkboxes ──────────────────────────────── */
+.pt-filtro-tipo-wrap {
+    position: relative;
+    flex: 1; min-width: 130px; max-width: 180px;
+}
+.pt-filtro-tipo-btn {
+    width: 100%;
+    text-align: left;
+    cursor: pointer;
+    display: flex; align-items: center;
+}
+.pt-filtro-tipo-btn--open,
+.pt-filtro-tipo-btn:focus {
+    outline: none;
+    border-color: var(--pt-accent);
+}
+.pt-filtro-tipo-panel {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    z-index: 20;
+    min-width: 210px;
+    background: var(--pt-surface);
+    border: 1.5px solid var(--pt-border);
+    border-radius: 12px;
+    box-shadow: 0 8px 24px rgba(15,23,42,.12);
+    padding: 8px;
+}
+.pt-filtro-tipo-panel--open { display: block; }
+.pt-filtro-tipo-opt {
+    display: flex; align-items: center; gap: 8px;
+    padding: 8px 6px;
+    border-radius: 8px;
+    font-size: .82rem; color: var(--pt-text);
+    cursor: pointer;
+    transition: background .12s;
+}
+.pt-filtro-tipo-opt:hover { background: #F1F5F9; }
+.pt-filtro-tipo-opt input[type="checkbox"] {
+    width: 17px; height: 17px;
+    accent-color: var(--pt-accent);
+    cursor: pointer;
+    flex-shrink: 0;
+}
+
+/* ── Select2: encajarlo con el estilo de los demás filtros (píldora) ─────────── */
+.pt-filtro-bar .select2-container { flex: 1; min-width: 150px; max-width: 210px; }
+.pt-filtro-bar .select2-container--default .select2-selection--single {
+    height: auto;
+    padding: 8px 12px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 10px;
+    background: var(--pt-surface);
+}
+.pt-filtro-bar .select2-container--default .select2-selection--single .select2-selection__rendered {
+    padding: 0; line-height: normal;
+    font-family: var(--pt-font); font-size: .82rem; color: var(--pt-text);
+}
+.pt-filtro-bar .select2-container--default .select2-selection--single .select2-selection__placeholder {
+    color: var(--pt-text);
+}
+.pt-filtro-bar .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 100%; top: 0; right: 8px;
+}
+.pt-filtro-bar .select2-container--default.select2-container--focus .select2-selection--single,
+.pt-filtro-bar .select2-container--default.select2-container--open .select2-selection--single {
+    border-color: var(--pt-accent);
+}
+.pt-filtro-bar .select2-container--default .select2-selection--single .select2-selection__clear {
+    margin-right: 6px;
+}
+.select2-dropdown {
+    border-radius: 10px;
+    border-color: var(--pt-border);
+    font-family: var(--pt-font); font-size: .84rem;
+    overflow: hidden;
+}
+.select2-search--dropdown .select2-search__field {
+    border-radius: 8px;
+    border: 1.5px solid var(--pt-border);
+    font-family: var(--pt-font);
+}
+.select2-results__option--highlighted[aria-selected] {
+    background: var(--pt-accent) !important;
+}
+
 .pt-filtro-clear {
     width: 34px; height: 34px;
     border-radius: 10px;
@@ -620,7 +707,71 @@
 }
 .pt-filtro-clear:hover { background: #FEE2E2; color: #DC2626; border-color: #FCA5A5; }
 
-/* Botón Asignar (admin) */
+/* Aviso: los filtros ocultan todos los partes cargados */
+.pt-filtro-sin-resultados {
+    display: flex; align-items: center; flex-wrap: wrap;
+    gap: 8px 12px;
+    margin: 0 16px 16px;
+    padding: 12px 14px;
+    background: #FFFBEB;
+    border: 1.5px solid #FDE68A;
+    border-radius: 12px;
+    font-family: var(--pt-font);
+}
+.pt-filtro-sin-resultados-ico { font-size: 1.1rem; flex-shrink: 0; }
+.pt-filtro-sin-resultados-txt {
+    flex: 1; min-width: 160px;
+    font-size: .8rem; color: #92400E; line-height: 1.4;
+}
+.pt-filtro-sin-resultados-btn {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    border: none; border-radius: 8px;
+    background: #D97706; color: #fff;
+    font-family: inherit; font-size: .78rem; font-weight: 700;
+    cursor: pointer;
+    transition: background .15s;
+}
+.pt-filtro-sin-resultados-btn:hover { background: #B45309; }
+
+/* Filtro de rango de fechas */
+.pt-filtro-fechas {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    flex-shrink: 0;
+}
+.pt-filtro-fecha {
+    padding: 8px 10px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 10px;
+    background: var(--pt-surface);
+    font-family: var(--pt-font);
+    font-size: .78rem;
+    color: var(--pt-text);
+    transition: border-color .18s;
+    min-width: 0;
+    max-width: 135px;
+}
+.pt-filtro-fecha:focus {
+    outline: none;
+    border-color: var(--pt-accent);
+}
+.pt-filtro-fecha-sep {
+    color: var(--pt-text-muted);
+    font-size: .8rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 600px) {
+    .pt-filtros-wrap { padding: 0 10px; gap: 6px; }
+    .pt-filtro-select { max-width: none; }
+    .pt-filtro-tipo-wrap { max-width: none; }
+    .pt-filtro-bar .select2-container { max-width: none; }
+    .pt-filtro-fechas { width: 100%; }
+    .pt-filtro-fecha { flex: 1; max-width: none; min-width: 0; }
+}
+
 .pt-btn-asignar {
     padding: 8px 16px;
     border-radius: 10px;
@@ -637,11 +788,6 @@
 }
 .pt-btn-asignar:hover  { background: #6D28D9; }
 .pt-btn-asignar:active { transform: scale(.97); }
-
-@media (max-width: 600px) {
-    .pt-filtros-wrap { padding: 0 10px; gap: 6px; }
-    .pt-filtro-select { max-width: none; }
-}
 
 /* ── Modal de asignación ─────────────────────────────────────────────────────── */
 .pt-modal {
@@ -672,7 +818,7 @@
 @media (min-width: 680px) {
     .pt-modal { align-items: center; }
     .pt-modal-box {
-        max-width: 600px; width: 100%;
+        min-width: 1000px; max-width: 1500px; width: 100%;
         border-radius: 18px;
         max-height: 80vh;
         transform: scale(.95);
@@ -844,6 +990,161 @@
 .pt-asig-link:hover {
     opacity: 1;
     transform: scale(1.15);
+}
+
+/* ── Selección múltiple: checkbox por fila ───────────────────────────────────── */
+.pt-asig-checkwrap {
+    display: flex; align-items: flex-start;
+    padding-top: 3px;
+    flex-shrink: 0;
+    cursor: pointer;
+}
+.pt-asig-check {
+    width: 18px; height: 18px;
+    accent-color: #7C3AED;
+    cursor: pointer;
+}
+.pt-asig-row--sel {
+    border-color: #7C3AED;
+    background: #FAF5FF;
+    box-shadow: 0 0 0 1px #7C3AED inset;
+}
+
+/* ── Layout: columna de seleccionados + listado filtrable ────────────────────── */
+.pt-asig-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+.pt-asig-main { min-width: 0; }
+
+.pt-asig-toolbar {
+    display: flex; align-items: center; gap: 8px;
+    margin-bottom: 10px;
+}
+.pt-asig-toolbar .pt-asig-search { margin-bottom: 0; flex: 1; }
+.pt-asig-selall {
+    flex-shrink: 0;
+    padding: 9px 12px;
+    border: 1.5px solid #E2E8F0; border-radius: 10px;
+    background: #fff; color: #475569;
+    font-family: var(--pt-font); font-size: .74rem; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+    transition: all .15s;
+}
+.pt-asig-selall:hover { border-color: #7C3AED; color: #7C3AED; }
+
+/* Columna "Seleccionados" */
+.pt-asig-selected-col {
+    background: #fff;
+    border: 1.5px solid #DDD6FE;
+    border-radius: 14px;
+    padding: 12px;
+    position: sticky;
+    top: 0;
+    z-index: 5;
+}
+.pt-asig-sel-hdr {
+    display: flex; align-items: center; justify-content: space-between;
+    font-size: .8rem; font-weight: 700; color: #4C1D95;
+    margin-bottom: 8px;
+}
+.pt-asig-sel-count {
+    background: #7C3AED; color: #fff;
+    border-radius: 999px;
+    min-width: 20px; height: 20px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: .72rem; font-weight: 700;
+    padding: 0 6px;
+}
+.pt-asig-sel-list {
+    display: flex; flex-direction: column; gap: 6px;
+    max-height: 160px; overflow-y: auto;
+    margin-bottom: 10px;
+}
+.pt-asig-sel-empty {
+    font-size: .74rem; color: #94A3B8; font-style: italic;
+    padding: 6px 2px;
+}
+.pt-asig-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: #F5F3FF;
+    border: 1px solid #DDD6FE;
+    border-radius: 10px;
+    padding: 6px 8px;
+}
+.pt-asig-chip-ref {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .74rem; font-weight: 700; color: #4C1D95;
+    white-space: nowrap;
+}
+.pt-asig-chip-cli {
+    font-size: .7rem; color: #64748B;
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pt-asig-sel-del {
+    flex-shrink: 0;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    background: rgba(124,58,237,.15);
+    border: none; color: #7C3AED;
+    font-size: .65rem; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s, color .15s;
+}
+.pt-asig-sel-del:hover { background: #FEE2E2; color: #DC2626; }
+
+.pt-asig-bulk {
+    display: flex; flex-wrap: wrap; gap: 6px;
+    padding-top: 10px;
+    border-top: 1px dashed #E2E8F0;
+}
+.pt-asig-bulk-select {
+    flex: 1; min-width: 120px;
+    padding: 8px 10px;
+    border: 1.5px solid #E2E8F0; border-radius: 8px;
+    font-family: var(--pt-font); font-size: .78rem;
+    background: #F8FAFC;
+}
+.pt-asig-bulk-btn {
+    flex: 1; min-width: 160px;
+    padding: 9px 12px;
+    background: #7C3AED; color: #fff;
+    border: none; border-radius: 8px;
+    font-family: var(--pt-font); font-size: .8rem; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+    transition: background .18s;
+}
+.pt-asig-bulk-btn:hover:not(:disabled) { background: #6D28D9; }
+.pt-asig-bulk-btn:disabled { background: #CBD5E1; cursor: not-allowed; }
+.pt-asig-bulk-clear {
+    padding: 9px 10px;
+    background: #fff; color: #94A3B8;
+    border: 1.5px solid #E2E8F0; border-radius: 8px;
+    font-family: var(--pt-font); font-size: .78rem;
+    cursor: pointer;
+}
+.pt-asig-bulk-clear:hover { color: #DC2626; border-color: #FCA5A5; }
+
+.pt-asig-offline-note {
+    background: #FFF7ED;
+    border: 1.5px solid #FED7AA;
+    color: #9A3412;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: .78rem;
+    margin-bottom: 10px;
+}
+
+/* Escritorio: columna de seleccionados junto al listado */
+@media (min-width: 680px) {
+    .pt-asig-layout { flex-direction: row; align-items: flex-start; }
+    .pt-asig-main   { flex: 1; order: 1; }
+    .pt-asig-selected-col {
+        width: 500px; flex-shrink: 0; order: 2;
+        max-height: 60vh; overflow-y: auto;
+    }
 }
 
 /* ── Color de fondo de ficha según estado del albarán ───────────────────────── */
