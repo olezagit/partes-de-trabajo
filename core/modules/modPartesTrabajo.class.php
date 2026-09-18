@@ -26,9 +26,11 @@ class modPartesTrabajo extends DolibarrModules
 
         $this->module_parts = array();
         $this->dirs         = array();
-        $this->config_page_url = array(
+       /* $this->config_page_url = array(
             'partes_trabajo/admin/setup.php'
-        );
+        );*/
+		
+        $this->config_page_url = array("setup.php@partes_trabajo");
         $this->hidden = false;
 
         // Sin dependencias obligatorias — solo módulos base de Dolibarr
