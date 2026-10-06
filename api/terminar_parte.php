@@ -243,35 +243,47 @@ if ($objMail && $objMail->enviado == 0) {
     $firmaCorp .= 'no dude en contactarnos a través de nuestros correos de contacto habituales.</b>';
     $firmaCorp .= '<br><br>Un saludo.<br><br>';
     $firmaCorp .= 'Para proteger el medio ambiente, no imprima este email si no es necesario.<br><br>';
-    $firmaCorp .= '<b>COMERCIAL FRIGORÍFICA OLEZA S.L.</b><br>';
-    $firmaCorp .= 'C/Enrique Monsonis Domingo, Nave 6 - Pol. Ind. Virgen del Carmen<br>';
-    $firmaCorp .= 'C.I.F.: B-03355419<br>';
-    $firmaCorp .= 'Telf: 96 674 21 90<br>';
-    $firmaCorp .= 'Email: <a href="mailto:administracion@comercialoleza.com">administracion@comercialoleza.com</a><br>';
-    $firmaCorp .= '<a href="https://www.comercialoleza.com">www.comercialoleza.com</a>';
+    $firmaCorp .= '<table>';
+    $firmaCorp .= '<tr><td rowspan="6"><img src="https://comercialoleza.com/recursos/logo.png" width="150px" height="auto"></td><td><b>COMERCIAL FRIGORÍFICA OLEZA S.L.</b><br></td></tr>';
+    $firmaCorp .= '<tr><td>C/Enrique Monsonis Domingo, Nave 6 - Pol. Ind. Virgen del Carmen<br></td></tr>';
+    $firmaCorp .= '<tr><td>C.I.F.: B-03355419<br></td></tr>';
+    $firmaCorp .= '<tr><td>Telf: 96 674 21 90<br></td></tr>';
+    $firmaCorp .= '<tr><td>Email: <a href="mailto:administracion@comercialoleza.com">administracion@comercialoleza.com</a><br></td></tr>';
+    $firmaCorp .= '<tr><td><a href="https://www.comercialoleza.com">www.comercialoleza.com</a></td></tr>';
+    $firmaCorp .= '</table>';
 
     require_once DOL_DOCUMENT_ROOT.'/core/class/CMailFile.class.php';
 
-    // ── Buscar el PDF generado ────────────────────────────────────────────────
-    // Dolibarr guarda los PDFs en DOL_DATA_ROOT/commande/{ref}/
-    // También lo buscamos via getMultidirOutput si $objCommande está disponible
+    // ── Localizar el PDF del ALBARÁN (nunca las fichas técnicas) ─────────────
+    // Las fichas técnicas se generan DESPUÉS del albarán y en la misma carpeta,
+    // así que "el PDF más reciente" acababa siendo una ficha. Ahora se busca el
+    // archivo exacto que generó generateDocument(), sin recorrer la carpeta.
     $dirPdf  = DOL_DATA_ROOT.'/commande/'.$refAlbaran.'/';
-
-    // Intentar obtener la ruta exacta del documento principal si lo tenemos
-    if (isset($objCommande) && is_object($objCommande) && !empty($objCommande->last_main_doc)) {
-        $candidato = DOL_DATA_ROOT.'/'.$objCommande->last_main_doc;
-        if (file_exists($candidato)) $dirPdf = dirname($candidato).'/';
-    }
-
     $pdfPath = '';
     $pdfName = '';
 
-    if (is_dir($dirPdf)) {
-        $archivos = glob($dirPdf.'*.pdf');
-        if (!empty($archivos)) {
-            usort($archivos, function($a, $b) { return filemtime($b) - filemtime($a); });
-            $pdfPath = $archivos[0];
-            $pdfName = basename($pdfPath);
+    if ($pdfGenerado && isset($objCommande) && is_object($objCommande)) {
+        $candidatos = array();
+
+        // 1) Ruta exacta devuelta por el generador de documentos
+        if (!empty($objCommande->result['fullpath'])) {
+            $candidatos[] = $objCommande->result['fullpath'];
+        }
+        // 2) last_main_doc leído de BD (el objeto en memoria es anterior a generar)
+        $resLmd = $db->query("SELECT last_main_doc FROM ".MAIN_DB_PREFIX."commande WHERE rowid = ".$parteId);
+        if ($resLmd && ($objLmd = $db->fetch_object($resLmd)) && !empty($objLmd->last_main_doc)) {
+            $candidatos[] = DOL_DATA_ROOT.'/'.$objLmd->last_main_doc;
+        }
+        // 3) Nombre estándar de Dolibarr: {ref}.pdf
+        $candidatos[] = $dirPdf.dol_sanitizeFileName($refAlbaran).'.pdf';
+
+        foreach ($candidatos as $candidato) {
+            if (is_file($candidato)) {
+                $pdfPath = $candidato;
+                $pdfName = basename($candidato);
+                $dirPdf  = dirname($candidato).'/';
+                break;
+            }
         }
     }
 
@@ -281,7 +293,7 @@ if ($objMail && $objMail->enviado == 0) {
     // ── Función auxiliar para enviar usando CMailFile ─────────────────────────
     $enviarCorreo = function(
         $para, $asunto, $cuerpo,
-        $adjuntoPath = '', $adjuntoNombre = '', $parteId
+        $adjuntoPath, $adjuntoNombre, $parteId, $bcc = ''
     ) use ($emailOrigen, $conf, $langs, $db) {
         $attachments = $adjuntoPath !== '' ? array($adjuntoPath) : array();
         $mimes       = $adjuntoPath !== '' ? array('application/pdf') : array();
@@ -295,8 +307,8 @@ if ($objMail && $objMail->enviado == 0) {
             $attachments,
             $mimes,
             $nombres,
-            '',  // CC
-            '',  // BCC
+            '',    // CC
+            $bcc,  // BCC (copia oculta)
             0,   // delivery receipt
             1,   // ishtml
             '',  // errors to
@@ -355,7 +367,7 @@ if ($objMail && $objMail->enviado == 0) {
             $cuerpoCliente .= '<p>Encontrará el albarán firmado adjunto a este correo.</p>';
             $cuerpoCliente .= '<p>Si tiene alguna duda, no dude en contactarnos.</p>';
             $cuerpoCliente .= $firmaCorp;
-            $enviarCorreo($emailCliente, $asuntoCliente, $cuerpoCliente, $pdfPath, $pdfName, $parteId);
+            $enviarCorreo($emailCliente, $asuntoCliente, $cuerpoCliente, $pdfPath, $pdfName, $parteId, $emailAdmin);
         } else {
             // Notificar a admin que NO se envió al cliente por falta de PDF
             $asuntoAviso  = '⚠️ ALBARÁN '.$refAlbaran.': NO enviado al cliente por falta de PDF';
@@ -365,7 +377,7 @@ if ($objMail && $objMail->enviado == 0) {
             $cuerpoAviso .= '<p>Por favor, genera el PDF manualmente desde Dolibarr y envíalo al cliente.</p>';
             $cuerpoAviso .= '<p>Ruta buscada: '.htmlspecialchars($dirPdf).'</p>';
             $cuerpoAviso .= $firmaCorp;
-            $enviarCorreo($emailAdmin, $asuntoAviso, $cuerpoAviso, $parteId);
+            $enviarCorreo($emailAdmin, $asuntoAviso, $cuerpoAviso, '', '', $parteId);
         }
     }
 }

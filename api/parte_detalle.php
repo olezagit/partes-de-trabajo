@@ -164,13 +164,26 @@ foreach (array('global', 'pm', 'man') as $grp) {
 }
 $selectFicha = implode(', ', array_map(function ($nombreCol) { return 'cdef.'.$nombreCol; }, $colsFicha));
 
-$sql2  = "SELECT cd.rowid, cd.rang, cd.description, cd.label, cd.qty,";
+// Autorreparación: crea (si hace falta) las columnas internas pt_creado_por
+// y maquina antes de usarlas. Si por lo que sea no se pudieran crear (p.ej.
+// el usuario de BD no tiene permiso ALTER TABLE), $pt_cols marca cuáles no
+// están disponibles y el SQL de abajo las omite, para que ver las líneas
+// del pedido NUNCA dependa de esas dos columnas — ver inc/asegurar_columnas.php.
+require_once __DIR__.'/../inc/asegurar_columnas.php';
+$pt_cols = pt_asegurar_columnas_modulo($db);
+
+$sql2  = "SELECT cd.rowid, cd.rang, cd.description, cd.label, cd.qty, cd.fk_product,";
 $sql2 .= "  u.short_label AS unidad, p.ref AS prod_ref, p.label AS prod_label,";
 $sql2 .= "  cdef.tarea_realizada";
+$sql2 .= ($pt_cols['pt_creado_por'] ? ", cdef.pt_creado_por" : "");
+$sql2 .= ($pt_cols['maquina']       ? ", pfe.maquina AS es_maquina" : "");
 $sql2 .= ($selectFicha !== '' ? ", ".$selectFicha : "");
 $sql2 .= " FROM ".MAIN_DB_PREFIX."commandedet cd";
 $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."c_units u  ON u.rowid  = cd.fk_unit";
 $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."product  p  ON p.rowid  = cd.fk_product";
+if ($pt_cols['maquina']) {
+    $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."product_extrafields pfe ON pfe.fk_object = cd.fk_product";
+}
 $sql2 .= " LEFT JOIN ".MAIN_DB_PREFIX."commandedet_extrafields cdef ON cdef.fk_object = cd.rowid";
 $sql2 .= " WHERE cd.fk_commande = ".$parteId;
 $sql2 .= " ORDER BY cd.rang ASC";
@@ -207,6 +220,8 @@ if ($resql2) {
             }
         }
 
+        $creadoPor = $pt_cols['pt_creado_por'] ? (int)($ln->pt_creado_por ?? 0) : 0;
+
         $lineas[] = array(
             'rowid'           => (int)$ln->rowid,
             'label'           => $clean_label,
@@ -215,10 +230,24 @@ if ($resql2) {
             'qty'             => (float)$ln->qty,
             'unidad'          => $ln->unidad,
             'tarea_realizada' => !empty($ln->tarea_realizada),
+            'es_maquina'      => $pt_cols['maquina'] ? !empty($ln->es_maquina) : false,
+            'tiene_producto'  => !empty($ln->fk_product),
+            // Solo el técnico que añadió la línea desde este módulo puede
+            // editarla/eliminarla — sin excepciones de rol (ni admin). Las
+            // líneas originales del pedido (creado_por = 0, sin registro
+            // pt_creado_por) son siempre de solo lectura para todo el mundo
+            // desde aquí; editarlas requiere entrar directamente en Dolibarr.
+            'creado_por'      => $creadoPor,
+            'puede_editar'    => ($creadoPor > 0 && $creadoPor === $userId),
             'ficha'           => $ficha,
         );
     }
     $db->free($resql2);
+} else {
+    // No debe pasar nunca (ver autorreparación arriba), pero si pasara,
+    // que quede constancia en el log en vez de fallar en silencio con un
+    // listado de tareas vacío y sin pista de por qué.
+    error_log('PartesTrabajo: fallo al leer líneas del pedido '.$parteId.': '.$db->lasterror());
 }
 
 // ── Anotaciones estructuradas (llx_partes_notas) ─────────────────────────────

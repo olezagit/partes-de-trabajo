@@ -292,16 +292,11 @@ const PtDetalle = (() => {
                     <span class="pd-chevron">▾</span>
                 </button>
                 <div class="pd-section-body open pd-tareas-body" id="sec-tareas-body">
-                    ${d.lineas.length > 0
-                        ? `<div class="pd-tareas-progress-wrap">
-                               <div class="pd-tareas-progress-bar" id="pd-tareas-progress-bar"></div>
-                           </div>
-                           ${d.lineas.map((ln, i) => tareaHTML(ln, i, p.tipo_albaran)).join('')}`
-                        : `<div class="pd-tareas-empty">
-                               <span>📝</span>
-                               <span>Sin tareas registradas en este parte</span>
-                           </div>`
-                    }
+                    <div class="pd-tareas-progress-wrap" id="pd-tareas-progress-wrap" style="${d.lineas.length > 0 ? '' : 'display:none'}">
+                        <div class="pd-tareas-progress-bar" id="pd-tareas-progress-bar"></div>
+                    </div>
+                    <div id="pd-tareas-lista">${tareasListInnerHTML(d.lineas, p.tipo_albaran)}</div>
+                    ${(p.statut !== 3 && p.statut !== -1) ? addLineaFormHTML(p.tipo_albaran) : ''}
                 </div>
             </div>
 
@@ -421,6 +416,7 @@ const PtDetalle = (() => {
         panel.querySelector('.pd-close-btn').addEventListener('click', close);
         wireCollapses();
         wireTareas(d.lineas, p.rowid, p.tipo_albaran);
+        wireAddLinea(p.rowid, p.tipo_albaran);
         wireFotos(p.rowid, p);
         wireNota(p.rowid);
         wireNotas(p.rowid);
@@ -566,6 +562,12 @@ const PtDetalle = (() => {
         const id      = 'sec-tarea-' + idx;
         const checkId = 'check-tarea-' + idx;
         const hecha   = !!ln.tarea_realizada;
+        const esMaquina = !!ln.es_maquina;
+        // Solo las líneas que el propio técnico añadió desde este módulo son
+        // editables/eliminables (ln.puede_editar lo calcula el servidor). Las
+        // líneas originales del pedido siempre son de solo lectura aquí.
+        const puedeEditar   = !!ln.puede_editar;
+        const tieneProducto = !!ln.tiene_producto;
         const nCampos = contarCamposFichaRellenos(ln.ficha);
 
         return `
@@ -576,21 +578,50 @@ const PtDetalle = (() => {
                     <span class="pd-tarea-num">${idx + 1}</span>
                 </span>
                 <span class="pd-section-title pd-tarea-titulo">${escH(label)}</span>
+                ${esMaquina ? '<span class="pd-tarea-maquina-badge" title="Máquina — ficha técnica obligatoria">🔧</span>' : ''}
                 ${qty ? `<span class="pd-tarea-qty">${escH(qty)}</span>` : ''}
                 <span class="pd-tarea-status pd-tarea-status--${hecha ? 'done' : 'pending'}" id="status-tarea-${idx}">${hecha ? 'Hecho' : 'Pendiente'}</span>
                 <span class="pd-chevron">▾</span>
             </button>
             <div class="pd-section-body${hecha ? ' open' : ''}" id="${id}">
                 <!-- Label en negrita + description en texto plano separados -->
-                <div class="pd-tarea-content">
+                <div class="pd-tarea-content" id="tarea-content-${idx}">
                     <div class="pd-tarea-label">${escH(label)}${qty ? `<span class="pd-tarea-qty-inline"> · ${escH(qty)}</span>` : ''}</div>
                     ${ln.prod_ref ? `<div class="pd-tarea-ref">${escH(ln.prod_ref)}</div>` : ''}
                     ${desc ? `<div class="pd-tarea-desc">${escH(desc)}</div>` : ''}
                     ${!desc && !ln.prod_ref ? `<div class="pd-tarea-nodesc">Sin descripción adicional</div>` : ''}
+                    ${puedeEditar ? `
+                    <div class="pd-tarea-owner-bar">
+                        <span class="pd-tarea-owner-tag">➕ Añadida por ti</span>
+                        <div class="pd-tarea-owner-actions">
+                            <button type="button" class="pd-tarea-edit-btn" data-idx="${idx}">✏️ Editar</button>
+                            <button type="button" class="pd-tarea-delete-btn" data-idx="${idx}">🗑 Eliminar</button>
+                        </div>
+                    </div>` : ''}
                 </div>
+                ${puedeEditar ? `
+                <div class="pd-tarea-edit-form" id="pd-tarea-edit-form-${idx}" style="display:none">
+                    ${tieneProducto ? `
+                        <div class="pd-tarea-edit-prod-lbl">${escH(ln.prod_ref || '')} — ${escH(label)}</div>
+                        <label class="pd-firma-label">Cantidad</label>
+                        <input type="number" class="pd-firma-input" id="pd-tarea-edit-qty-${idx}" min="0.01" step="any" value="${ln.qty ?? 1}">
+                        <label class="pd-firma-label">Notas / descripción</label>
+                        <textarea class="pd-textarea" id="pd-tarea-edit-desc-${idx}" rows="2">${escH(desc)}</textarea>
+                    ` : `
+                        <label class="pd-firma-label">Título</label>
+                        <input type="text" class="pd-firma-input" id="pd-tarea-edit-label-${idx}" value="${escH(ln.label || '')}">
+                        <label class="pd-firma-label">Descripción</label>
+                        <textarea class="pd-textarea" id="pd-tarea-edit-desc-${idx}" rows="3">${escH(desc)}</textarea>
+                    `}
+                    <div class="pd-add-linea-actions">
+                        <button type="button" class="pd-ficha-guardar-btn pd-tarea-edit-save-btn" data-idx="${idx}">💾 Guardar</button>
+                        <button type="button" class="pd-nota-edit-cancel pd-tarea-edit-cancel-btn" data-idx="${idx}">Cancelar</button>
+                    </div>
+                    <div class="pd-ficha-feedback" id="pd-tarea-edit-feedback-${idx}"></div>
+                </div>` : ''}
                 <!-- Ficha técnica del producto -->
-                <button type="button" class="pd-tarea-ficha-btn" data-idx="${idx}" data-rowid="${ln.rowid}">
-                    <span>📋 Ficha técnica</span>
+                <button type="button" class="pd-tarea-ficha-btn${esMaquina ? ' pd-tarea-ficha-btn--obligatoria' : ''}" data-idx="${idx}" data-rowid="${ln.rowid}">
+                    <span>📋 Ficha técnica${esMaquina ? ' (obligatoria)' : ''}</span>
                     ${nCampos > 0 ? `<span class="pd-tarea-ficha-badge">${nCampos} rellenos</span>` : ''}
                     <span class="pd-tarea-ficha-arrow">›</span>
                 </button>
@@ -606,6 +637,40 @@ const PtDetalle = (() => {
         </div>`;
     }
 
+    /** HTML de la lista de tareas completa (estado vacío o tarjetas), reutilizado
+     *  tanto en el primer render como al añadir/editar/eliminar una línea. */
+    function tareasListInnerHTML(lineas, tipoAlbaran) {
+        if (!lineas || lineas.length === 0) {
+            return `<div class="pd-tareas-empty">
+                       <span>📝</span>
+                       <span>Sin tareas registradas en este parte</span>
+                   </div>`;
+        }
+        return lineas.map((ln, i) => tareaHTML(ln, i, tipoAlbaran)).join('');
+    }
+
+    /** Reconstruye solo el contenido de #pd-tareas-lista a partir de
+     *  lineasActuales — se llama tras añadir, editar o eliminar una línea, en
+     *  vez de re-renderizar el panel entero. Los índices (data-idx) siempre
+     *  quedan sincronizados con el array porque se regeneran desde cero. */
+    function renderTareasList() {
+        const lista = panel.querySelector('#pd-tareas-lista');
+        if (lista) lista.innerHTML = tareasListInnerHTML(lineasActuales, tipoAlbaranActual);
+        const wrap = panel.querySelector('#pd-tareas-progress-wrap');
+        if (wrap) wrap.style.display = tareasTotal > 0 ? '' : 'none';
+        actualizarProgresoTareas();
+        actualizarBotonTerminar();
+    }
+
+    /** Recalcula el Set de tareas completadas a partir de lineasActuales.
+     *  Necesario tras eliminar una línea: los índices de las líneas
+     *  posteriores se desplazan y el Set no se puede parchear a mano. */
+    function reindexarTareasCompletadas() {
+        tareasCompletadas = new Set();
+        lineasActuales.forEach((ln, i) => { if (ln.tarea_realizada) tareasCompletadas.add(i); });
+        tareasTotal = lineasActuales.length;
+    }
+
     /** Cuenta cuántos campos de la ficha técnica de una línea tienen valor (para el contador del botón). */
     function contarCamposFichaRellenos(ficha) {
         if (!ficha) return 0;
@@ -613,6 +678,24 @@ const PtDetalle = (() => {
             if (Array.isArray(v)) return v.length > 0; // multiselect: solo cuenta si hay algo marcado
             return v !== '' && v !== null && v !== false && v !== undefined;
         }).length;
+    }
+
+    /**
+     * Comprueba si una línea marcada como "máquina" tiene ya rellenos los
+     * campos mínimos obligatorios de su ficha técnica (marca/modelo/nº de
+     * serie por defecto — ver inc/campos_linea_extra.php→requeridos_si_maquina).
+     * Las líneas que no son máquina siempre se consideran "completas" aquí.
+     */
+    function fichaMaquinaCompleta(ln) {
+        if (!ln || !ln.es_maquina) return true;
+        const requeridos = (window.PT_CAMPOS_LINEA && Array.isArray(window.PT_CAMPOS_LINEA.requeridos_si_maquina))
+            ? window.PT_CAMPOS_LINEA.requeridos_si_maquina
+            : ['marca', 'modelo', 'nserie'];
+        const ficha = ln.ficha || {};
+        return requeridos.every(campo => {
+            const v = ficha[campo];
+            return v !== undefined && v !== null && String(v).trim() !== '';
+        });
     }
 
     function escH(str) {
@@ -624,15 +707,22 @@ const PtDetalle = (() => {
     // ══════════════════════════════════════════════════════════════════════════
     // Desplegables
     // ══════════════════════════════════════════════════════════════════════════
+    // Delegado en `panel` (en vez de un listener por cabecera) para que siga
+    // funcionando también en las tarjetas de tarea que se regeneran después
+    // de añadir/editar/eliminar una línea. `panel` se reutiliza entre
+    // aperturas del panel, así que se conecta una única vez (guardián abajo).
+    let colapsablesWireados = false;
     function wireCollapses() {
-        panel.querySelectorAll('.pd-section-hdr[data-target]').forEach(hdr => {
-            hdr.addEventListener('click', () => {
-                const body = document.getElementById(hdr.dataset.target);
-                if (!body) return;
-                const opening = !hdr.classList.contains('open');
-                hdr.classList.toggle('open', opening);
-                body.classList.toggle('open', opening);
-            });
+        if (colapsablesWireados) return;
+        colapsablesWireados = true;
+        panel.addEventListener('click', e => {
+            const hdr = e.target.closest('.pd-section-hdr[data-target]');
+            if (!hdr) return;
+            const body = document.getElementById(hdr.dataset.target);
+            if (!body) return;
+            const opening = !hdr.classList.contains('open');
+            hdr.classList.toggle('open', opening);
+            body.classList.toggle('open', opening);
         });
     }
 
@@ -648,6 +738,8 @@ const PtDetalle = (() => {
     let parteIdActual     = null;
     let lineasActuales    = [];
     let tipoAlbaranActual = null;
+    let lineaSeleccionada = null; // producto/servicio elegido en el formulario de "Añadir línea"
+    let tareasDelegacionWireada = false; // evita duplicar los listeners delegados entre aperturas del panel
 
     function wireTareas(lineas, parteId, tipoAlbaran) {
         tareasTotal   = lineas.length;
@@ -661,20 +753,158 @@ const PtDetalle = (() => {
             if (ln.tarea_realizada) tareasCompletadas.add(idx);
         });
 
-        panel.querySelectorAll('.pd-tarea-check').forEach(chk => {
-            chk.addEventListener('click', () => toggleTarea(chk));
-            chk.addEventListener('keydown', e => {
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggleTarea(chk); }
-            });
-        });
-        panel.querySelectorAll('.pd-tarea-ficha-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const idx = parseInt(btn.dataset.idx, 10);
-                abrirFichaModal(lineasActuales[idx], idx);
-            });
-        });
         actualizarBotonTerminar();
         actualizarProgresoTareas();
+
+        // Delegación de eventos en `panel`: así el checkbox, la ficha técnica,
+        // y los botones de editar/guardar/cancelar/eliminar de cada tarea
+        // funcionan también en las tarjetas que se regeneran dinámicamente
+        // (renderTareasList) tras añadir, editar o eliminar una línea, sin
+        // necesidad de volver a conectar listeners uno por uno.
+        if (tareasDelegacionWireada) return;
+        tareasDelegacionWireada = true;
+
+        panel.addEventListener('click', e => {
+            const chk = e.target.closest('.pd-tarea-check');
+            if (chk) { toggleTarea(chk); return; }
+
+            const fichaBtn = e.target.closest('.pd-tarea-ficha-btn');
+            if (fichaBtn) {
+                const idx = parseInt(fichaBtn.dataset.idx, 10);
+                abrirFichaModal(lineasActuales[idx], idx);
+                return;
+            }
+
+            const editBtn = e.target.closest('.pd-tarea-edit-btn');
+            if (editBtn) { abrirEdicionTarea(parseInt(editBtn.dataset.idx, 10)); return; }
+
+            const cancelEditBtn = e.target.closest('.pd-tarea-edit-cancel-btn');
+            if (cancelEditBtn) { cerrarEdicionTarea(parseInt(cancelEditBtn.dataset.idx, 10)); return; }
+
+            const saveEditBtn = e.target.closest('.pd-tarea-edit-save-btn');
+            if (saveEditBtn) { guardarEdicionTarea(parseInt(saveEditBtn.dataset.idx, 10)); return; }
+
+            const delBtn = e.target.closest('.pd-tarea-delete-btn');
+            if (delBtn) { eliminarTarea(parseInt(delBtn.dataset.idx, 10)); return; }
+        });
+
+        panel.addEventListener('keydown', e => {
+            const chk = e.target.closest('.pd-tarea-check');
+            if (chk && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleTarea(chk); }
+        });
+    }
+
+    /** Muestra el formulario de edición inline de una tarea (oculta el contenido normal). */
+    function abrirEdicionTarea(idx) {
+        const contentEl = panel.querySelector(`#tarea-content-${idx}`);
+        const formEl    = panel.querySelector(`#pd-tarea-edit-form-${idx}`);
+        if (!formEl) return;
+        if (contentEl) contentEl.style.display = 'none';
+        formEl.style.display = 'block';
+    }
+
+    /** Cierra el formulario de edición inline sin guardar cambios. */
+    function cerrarEdicionTarea(idx) {
+        const contentEl = panel.querySelector(`#tarea-content-${idx}`);
+        const formEl    = panel.querySelector(`#pd-tarea-edit-form-${idx}`);
+        if (formEl) formEl.style.display = 'none';
+        if (contentEl) contentEl.style.display = '';
+    }
+
+    /** Guarda los cambios de una línea que el propio técnico añadió (título/
+     *  descripción si es descriptiva, o cantidad/notas si es producto o
+     *  servicio). El servidor vuelve a comprobar que la línea es realmente
+     *  suya antes de aceptar el cambio. */
+    async function guardarEdicionTarea(idx) {
+        const ln = lineasActuales[idx];
+        if (!ln) return;
+        const feedback = panel.querySelector(`#pd-tarea-edit-feedback-${idx}`);
+        const saveBtn  = panel.querySelector(`.pd-tarea-edit-save-btn[data-idx="${idx}"]`);
+        if (feedback) { feedback.textContent = ''; feedback.className = 'pd-ficha-feedback'; }
+
+        const payload = { linea_id: ln.rowid, parte_id: parteIdActual };
+
+        if (ln.tiene_producto) {
+            const qtyInput = panel.querySelector(`#pd-tarea-edit-qty-${idx}`);
+            const qty = parseFloat(qtyInput?.value);
+            if (!qty || qty <= 0) {
+                if (feedback) { feedback.textContent = '⚠️ Indica una cantidad válida.'; feedback.className = 'pd-ficha-feedback pd-feedback--error'; }
+                return;
+            }
+            payload.qty = qty;
+            const descInput = panel.querySelector(`#pd-tarea-edit-desc-${idx}`);
+            payload.description = (descInput?.value || '').trim();
+        } else {
+            const labelInput = panel.querySelector(`#pd-tarea-edit-label-${idx}`);
+            const descInput  = panel.querySelector(`#pd-tarea-edit-desc-${idx}`);
+            const label = (labelInput?.value || '').trim();
+            const desc  = (descInput?.value || '').trim();
+            if (!label && !desc) {
+                if (feedback) { feedback.textContent = '⚠️ Escribe un título o una descripción.'; feedback.className = 'pd-ficha-feedback pd-feedback--error'; }
+                return;
+            }
+            payload.label = label;
+            payload.description = desc;
+        }
+
+        if (!navigator.onLine) {
+            if (feedback) { feedback.textContent = '📴 Necesitas conexión a internet para editar esta línea.'; feedback.className = 'pd-ficha-feedback pd-feedback--error'; }
+            return;
+        }
+
+        if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = '⏳ Guardando…'; }
+
+        try {
+            const res = await fetch(`${window.PT_BASE}/index.php?pt_do=editar_linea`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
+
+            lineasActuales[idx] = Object.assign({}, ln, {
+                label:       data.linea.label,
+                description: data.linea.description,
+                qty:         data.linea.qty,
+            });
+            renderTareasList();
+            if (typeof window.showToast === 'function') window.showToast('✅ Línea actualizada', 'success');
+        } catch (err) {
+            if (feedback) { feedback.textContent = '❌ ' + err.message; feedback.className = 'pd-ficha-feedback pd-feedback--error'; }
+            if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = '💾 Guardar'; }
+        }
+    }
+
+    /** Elimina una línea que el propio técnico añadió, previa confirmación. */
+    async function eliminarTarea(idx) {
+        const ln = lineasActuales[idx];
+        if (!ln) return;
+        if (!confirm(`¿Eliminar la línea "${ln.label || 'Tarea ' + (idx + 1)}"? Esta acción no se puede deshacer.`)) return;
+
+        if (!navigator.onLine) {
+            if (typeof window.showToast === 'function') window.showToast('📴 Necesitas conexión a internet para eliminar esta línea.', 'error', 6000);
+            return;
+        }
+
+        try {
+            const res = await fetch(`${window.PT_BASE}/index.php?pt_do=eliminar_linea`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: JSON.stringify({ linea_id: ln.rowid, parte_id: parteIdActual })
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
+
+            lineasActuales.splice(idx, 1);
+            reindexarTareasCompletadas();
+            renderTareasList();
+            if (typeof window.showToast === 'function') window.showToast('🗑 Línea eliminada', 'success');
+        } catch (err) {
+            if (typeof window.showToast === 'function') window.showToast('❌ No se pudo eliminar: ' + err.message, 'error', 6000);
+        }
     }
 
     function toggleTarea(chk) {
@@ -793,6 +1023,8 @@ const PtDetalle = (() => {
         if (!btn) return;
 
         const todasOk  = tareasTotal === 0 || tareasCompletadas.size === tareasTotal;
+        const maquinasSinFicha = lineasActuales.filter(ln => !fichaMaquinaCompleta(ln));
+        const fichasOk = maquinasSinFicha.length === 0;
         const canvasC  = panel.querySelector('#pd-canvas-cliente');
         const canvasT  = panel.querySelector('#pd-canvas-tecnico');
         // Las firmas deben estar CONFIRMADAS (locked), no solo dibujadas
@@ -804,13 +1036,15 @@ const PtDetalle = (() => {
         const horaIniOk = (panel.querySelector('#pd-hora-inicio')?.value    || '').trim().length > 0;
         const horaFinOk = (panel.querySelector('#pd-hora-fin')?.value       || '').trim().length > 0;
 
-        const listo = todasOk && firmasCk && nombreOk && dniOk && horaIniOk && horaFinOk;
+        const listo = todasOk && fichasOk && firmasCk && nombreOk && dniOk && horaIniOk && horaFinOk;
         btn.disabled = !listo;
 
         // Texto informativo en el botón
         if (!todasOk) {
             const pendientes = tareasTotal - tareasCompletadas.size;
             btn.textContent = `⏳ Faltan ${pendientes} tarea${pendientes > 1 ? 's' : ''} por completar`;
+        } else if (!fichasOk) {
+            btn.textContent = `🔧 Rellena la ficha técnica de ${maquinasSinFicha.length} máquina${maquinasSinFicha.length > 1 ? 's' : ''}`;
         } else if (!nombreOk || !dniOk) {
             btn.textContent = '⚠️ Completa los datos del cliente';
         } else if (!firmaC && !firmaT) {
@@ -823,6 +1057,267 @@ const PtDetalle = (() => {
             btn.textContent = '⏱️ Rellena el horario del servicio';
         } else {
             btn.textContent = '✅ Terminar parte';
+        }
+    }
+
+    // ══════════════════════════════════════════════════════════════════════════
+    // Añadir línea nueva (descriptiva, producto o servicio)
+    // ══════════════════════════════════════════════════════════════════════════
+
+    /**
+     * HTML del formulario de "Añadir línea", insertado al final del listado
+     * de tareas. Empieza oculto (el botón "➕ Añadir línea" lo despliega).
+     */
+    function addLineaFormHTML(tipoAlbaran) {
+        const esMantenimiento = parseInt(tipoAlbaran, 10) === 4;
+        const hintProducto = esMantenimiento
+            ? 'En Mantenimiento puedes añadir cualquier producto (recambios, consumibles…).'
+            : 'Solo se muestran productos marcados como máquina para este tipo de parte.';
+        return `
+        <div class="pd-add-linea-wrap">
+            <button type="button" class="pd-add-linea-btn" id="pd-add-linea-btn">➕ Añadir línea</button>
+            <div class="pd-add-linea-form" id="pd-add-linea-form" style="display:none">
+                <div class="pd-add-linea-tipos">
+                    <label class="pd-add-linea-tipo-opt">
+                        <input type="radio" name="pd-linea-tipo" value="descriptiva" checked> Descriptiva
+                    </label>
+                    <label class="pd-add-linea-tipo-opt">
+                        <input type="radio" name="pd-linea-tipo" value="producto"> Producto
+                    </label>
+                    <label class="pd-add-linea-tipo-opt">
+                        <input type="radio" name="pd-linea-tipo" value="servicio"> Servicio
+                    </label>
+                </div>
+                <div id="pd-add-linea-descriptiva">
+                    <input type="text" class="pd-firma-input" id="pd-linea-label" placeholder="Título breve (opcional)">
+                    <textarea class="pd-textarea" id="pd-linea-desc" rows="3" placeholder="Descripción de la tarea…"></textarea>
+                </div>
+                <div id="pd-add-linea-producto" style="display:none">
+                    <p class="pd-add-linea-hint" id="pd-add-linea-hint">${escH(hintProducto)}</p>
+                    <input type="text" class="pd-firma-input" id="pd-linea-buscar" placeholder="Buscar producto…" autocomplete="off">
+                    <div class="pd-linea-resultados" id="pd-linea-resultados"></div>
+                    <div class="pd-linea-seleccion" id="pd-linea-seleccion" style="display:none">
+                        <span id="pd-linea-seleccion-txt"></span>
+                        <button type="button" class="pd-linea-quitar" id="pd-linea-quitar">✕</button>
+                    </div>
+                    <label class="pd-firma-label">Cantidad</label>
+                    <input type="number" class="pd-firma-input" id="pd-linea-qty" min="0.01" step="any" value="1">
+                </div>
+                <div class="pd-add-linea-actions">
+                    <button type="button" class="pd-ficha-guardar-btn" id="pd-linea-guardar-btn">💾 Añadir a la lista</button>
+                    <button type="button" class="pd-nota-edit-cancel" id="pd-linea-cancelar-btn">Cancelar</button>
+                </div>
+                <div class="pd-ficha-feedback" id="pd-linea-feedback"></div>
+            </div>
+        </div>`;
+    }
+
+    function wireAddLinea(parteId, tipoAlbaran) {
+        const btn  = panel.querySelector('#pd-add-linea-btn');
+        const form = panel.querySelector('#pd-add-linea-form');
+        if (!btn || !form) return; // parte cerrado/cancelado: no se renderizó el formulario
+
+        btn.addEventListener('click', () => {
+            const abriendo = form.style.display === 'none';
+            form.style.display = abriendo ? 'block' : 'none';
+            btn.textContent = abriendo ? '✕ Cancelar' : '➕ Añadir línea';
+        });
+
+        const radios       = panel.querySelectorAll('input[name="pd-linea-tipo"]');
+        const wrapDesc      = panel.querySelector('#pd-add-linea-descriptiva');
+        const wrapProd      = panel.querySelector('#pd-add-linea-producto');
+        const hintEl        = panel.querySelector('#pd-add-linea-hint');
+        const buscarInput   = panel.querySelector('#pd-linea-buscar');
+        const resultadosEl  = panel.querySelector('#pd-linea-resultados');
+        const seleccionEl   = panel.querySelector('#pd-linea-seleccion');
+        const seleccionTxt  = panel.querySelector('#pd-linea-seleccion-txt');
+
+        function tipoActual() {
+            return panel.querySelector('input[name="pd-linea-tipo"]:checked')?.value || 'descriptiva';
+        }
+
+        function actualizarVisibilidadTipo() {
+            const t = tipoActual();
+            wrapDesc.style.display = t === 'descriptiva' ? 'block' : 'none';
+            wrapProd.style.display = t !== 'descriptiva' ? 'block' : 'none';
+            lineaSeleccionada = null;
+            if (seleccionEl) seleccionEl.style.display = 'none';
+            if (resultadosEl) resultadosEl.innerHTML = '';
+            if (buscarInput) {
+                buscarInput.value = '';
+                buscarInput.placeholder = t === 'servicio' ? 'Buscar servicio…' : 'Buscar producto…';
+            }
+            if (hintEl) {
+                const esMantenimiento = parseInt(tipoAlbaran, 10) === 4;
+                if (t === 'servicio') {
+                    hintEl.textContent = 'Los servicios no requieren estar marcados como máquina.';
+                } else {
+                    hintEl.textContent = esMantenimiento
+                        ? 'En Mantenimiento puedes añadir cualquier producto (recambios, consumibles…).'
+                        : 'Solo se muestran productos marcados como máquina para este tipo de parte.';
+                }
+            }
+        }
+        radios.forEach(r => r.addEventListener('change', actualizarVisibilidadTipo));
+        actualizarVisibilidadTipo();
+
+        let buscarTimeout = null;
+        buscarInput?.addEventListener('input', () => {
+            clearTimeout(buscarTimeout);
+            const q = buscarInput.value.trim();
+            lineaSeleccionada = null;
+            if (seleccionEl) seleccionEl.style.display = 'none';
+            if (q.length < 2) { resultadosEl.innerHTML = ''; return; }
+            buscarTimeout = setTimeout(() => buscarProductosLinea(q, tipoActual(), resultadosEl), 300);
+        });
+
+        resultadosEl?.addEventListener('click', e => {
+            const item = e.target.closest('.pd-linea-resultado-item');
+            if (!item) return;
+            lineaSeleccionada = {
+                rowid: parseInt(item.dataset.id, 10),
+                ref: item.dataset.ref,
+                label: item.dataset.label,
+                maquina: item.dataset.maquina === '1',
+            };
+            if (seleccionTxt) {
+                seleccionTxt.textContent = `${lineaSeleccionada.ref} — ${lineaSeleccionada.label}` + (lineaSeleccionada.maquina ? ' 🔧' : '');
+            }
+            if (seleccionEl) seleccionEl.style.display = 'flex';
+            resultadosEl.innerHTML = '';
+            buscarInput.value = '';
+        });
+
+        panel.querySelector('#pd-linea-quitar')?.addEventListener('click', () => {
+            lineaSeleccionada = null;
+            if (seleccionEl) seleccionEl.style.display = 'none';
+        });
+
+        panel.querySelector('#pd-linea-cancelar-btn')?.addEventListener('click', () => {
+            form.style.display = 'none';
+            btn.textContent = '➕ Añadir línea';
+        });
+
+        panel.querySelector('#pd-linea-guardar-btn')?.addEventListener('click', () => guardarLinea(parteId));
+    }
+
+    async function buscarProductosLinea(q, tipoLinea, resultadosEl) {
+        resultadosEl.innerHTML = '<div class="pd-linea-resultado-loading">Buscando…</div>';
+        try {
+            const params = new URLSearchParams({ pt_do: 'buscar_productos', q, tipo_linea: tipoLinea, tipo_albaran: tipoAlbaranActual ?? 0 });
+            const res = await fetch(`${window.PT_BASE}/index.php?${params.toString()}`, {
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin'
+            });
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+            renderResultadosLinea(data.productos || [], resultadosEl);
+        } catch (err) {
+            resultadosEl.innerHTML = `<div class="pd-linea-resultado-err">❌ ${escH(err.message)}</div>`;
+        }
+    }
+
+    function renderResultadosLinea(lista, resultadosEl) {
+        if (lista.length === 0) {
+            resultadosEl.innerHTML = '<div class="pd-linea-resultado-vacio">Sin resultados</div>';
+            return;
+        }
+        resultadosEl.innerHTML = lista.map(p => `
+            <button type="button" class="pd-linea-resultado-item" data-id="${p.rowid}" data-ref="${escH(p.ref)}" data-label="${escH(p.label)}" data-maquina="${p.maquina ? 1 : 0}">
+                <span class="pd-linea-resultado-ref">${escH(p.ref)}</span>
+                <span class="pd-linea-resultado-label">${escH(p.label)}</span>
+                ${p.maquina ? '<span class="pd-linea-resultado-maquina" title="Máquina">🔧</span>' : ''}
+            </button>`).join('');
+    }
+
+    async function guardarLinea(parteId) {
+        const guardarBtn = panel.querySelector('#pd-linea-guardar-btn');
+        const feedback   = panel.querySelector('#pd-linea-feedback');
+        const t = panel.querySelector('input[name="pd-linea-tipo"]:checked')?.value || 'descriptiva';
+
+        if (!feedback || !guardarBtn) return;
+        feedback.textContent = '';
+        feedback.className = 'pd-ficha-feedback';
+
+        // Añadir líneas requiere conexión: necesitamos que el servidor genere
+        // el ID real de la línea antes de poder marcarla como tarea o
+        // rellenar su ficha técnica, así que no se puede encolar sin más.
+        if (!navigator.onLine) {
+            feedback.textContent = '📴 Necesitas conexión a internet para añadir una línea nueva.';
+            feedback.className = 'pd-ficha-feedback pd-feedback--error';
+            return;
+        }
+
+        const payload = { parte_id: parteId, tipo_linea: t };
+
+        if (t === 'descriptiva') {
+            const label = (panel.querySelector('#pd-linea-label')?.value || '').trim();
+            const desc  = (panel.querySelector('#pd-linea-desc')?.value  || '').trim();
+            if (!label && !desc) {
+                feedback.textContent = '⚠️ Escribe un título o una descripción.';
+                feedback.className = 'pd-ficha-feedback pd-feedback--error';
+                return;
+            }
+            payload.label = label;
+            payload.description = desc;
+        } else {
+            if (!lineaSeleccionada) {
+                feedback.textContent = `⚠️ Selecciona ${t === 'servicio' ? 'un servicio' : 'un producto'} de la lista.`;
+                feedback.className = 'pd-ficha-feedback pd-feedback--error';
+                return;
+            }
+            const qty = parseFloat(panel.querySelector('#pd-linea-qty')?.value);
+            if (!qty || qty <= 0) {
+                feedback.textContent = '⚠️ Indica una cantidad válida.';
+                feedback.className = 'pd-ficha-feedback pd-feedback--error';
+                return;
+            }
+            payload.fk_product = lineaSeleccionada.rowid;
+            payload.qty = qty;
+        }
+
+        guardarBtn.disabled = true;
+        guardarBtn.textContent = '⏳ Añadiendo…';
+
+        try {
+            const res = await fetch(`${window.PT_BASE}/index.php?pt_do=agregar_linea`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+                body: JSON.stringify(payload)
+            });
+            const data = await res.json();
+            if (!res.ok || data.error) throw new Error(data.error || 'Error del servidor');
+
+            // Añadir a la lista local y repintar la lista de tareas. Todos los
+            // eventos (checkbox, ficha, editar/eliminar, colapsar) ya están
+            // delegados en `panel`, así que no hace falta conectar nada a mano.
+            lineasActuales.push(data.linea);
+            tareasTotal = lineasActuales.length;
+            renderTareasList();
+
+            // Reset del formulario, listo para añadir otra línea
+            const labelInput = panel.querySelector('#pd-linea-label');
+            const descInput  = panel.querySelector('#pd-linea-desc');
+            const qtyInput   = panel.querySelector('#pd-linea-qty');
+            if (labelInput) labelInput.value = '';
+            if (descInput)  descInput.value  = '';
+            if (qtyInput)   qtyInput.value   = '1';
+            lineaSeleccionada = null;
+            const seleccionEl = panel.querySelector('#pd-linea-seleccion');
+            if (seleccionEl) seleccionEl.style.display = 'none';
+            const form = panel.querySelector('#pd-add-linea-form');
+            const btnAdd = panel.querySelector('#pd-add-linea-btn');
+            if (form) form.style.display = 'none';
+            if (btnAdd) btnAdd.textContent = '➕ Añadir línea';
+
+            if (typeof window.showToast === 'function') window.showToast('✅ Línea añadida', 'success');
+        } catch (err) {
+            feedback.textContent = '❌ ' + err.message;
+            feedback.className = 'pd-ficha-feedback pd-feedback--error';
+        } finally {
+            guardarBtn.disabled = false;
+            guardarBtn.textContent = '💾 Añadir a la lista';
         }
     }
 
@@ -926,9 +1421,10 @@ const PtDetalle = (() => {
         fichaModalEl.innerHTML = `
             <div class="pd-ficha-modal-box">
                 <div class="pd-ficha-modal-hdr">
-                    <span>📋 ${escH(ln.label || 'Ficha técnica')}</span>
+                    <span>📋 ${escH(ln.label || 'Ficha técnica')}${ln.es_maquina ? ' 🔧' : ''}</span>
                     <button type="button" class="pd-ficha-modal-close" aria-label="Cerrar">✕</button>
                 </div>
+                ${ln.es_maquina ? `<div class="pd-ficha-obligatoria-aviso">🔧 Este producto es una máquina: la marca, el modelo y el nº de serie son obligatorios antes de poder terminar el parte.</div>` : ''}
                 <div class="pd-ficha-modal-body">${cuerpo}</div>
                 <div class="pd-ficha-modal-footer">
                     <button type="button" class="pd-ficha-guardar-btn" id="pd-ficha-guardar-btn">💾 Guardar ficha técnica</button>
@@ -1005,6 +1501,7 @@ const PtDetalle = (() => {
 
                 ln.ficha = Object.assign({}, ln.ficha, campos);
                 actualizarBadgeFicha(idx, ln.ficha);
+                actualizarBotonTerminar();
                 if (typeof window.showToast === 'function') window.showToast('✅ Ficha técnica guardada', 'success');
                 cerrarFichaModal();
             } else {
@@ -1015,6 +1512,7 @@ const PtDetalle = (() => {
                 }
                 ln.ficha = Object.assign({}, ln.ficha, campos);
                 actualizarBadgeFicha(idx, ln.ficha);
+                actualizarBotonTerminar();
                 cerrarFichaModal();
             }
         } catch (err) {
@@ -1562,6 +2060,11 @@ const PtDetalle = (() => {
                 showFeedback(feedback, '⚠️ Completa todas las tareas antes de terminar.', 'warn');
                 return;
             }
+            const maquinasSinFicha = lineasActuales.filter(ln => !fichaMaquinaCompleta(ln));
+            if (maquinasSinFicha.length > 0) {
+                showFeedback(feedback, `⚠️ Rellena la ficha técnica (marca, modelo y nº de serie) de ${maquinasSinFicha.length} máquina${maquinasSinFicha.length > 1 ? 's' : ''} antes de terminar.`, 'warn');
+                return;
+            }
             if (!nombreCliente || !dniCliente || !canvasCliente?.dataset.signed || !canvasTecnico?.dataset.signed) {
                 showFeedback(feedback, '⚠️ Completa todos los campos y firmas.', 'warn');
                 return;
@@ -1612,8 +2115,16 @@ const PtDetalle = (() => {
                         }
                     }, 1200);
                 } else {
-                    await PtDB.saveAccion('terminar', parteId, payload,
-                        `${window.PT_BASE}/index.php?pt_do=terminar`, 'POST');
+                    // Sin conexión: encolar la acción de la misma forma que el
+                    // resto del módulo (guarda un objeto {tipo, parte_id, payload,
+                    // url, method}, no una lista de argumentos sueltos), para que
+                    // flushPendingActions() la envíe correctamente al recuperar la red.
+                    const urlTerminar = `${window.PT_BASE}/index.php?pt_do=terminar`;
+                    if (typeof window.ptSaveAccionOffline === 'function') {
+                        await window.ptSaveAccionOffline('terminar', parteId, payload, urlTerminar);
+                    } else {
+                        await PtDB.saveAccion({ tipo: 'terminar', parte_id: parteId, payload, url: urlTerminar, method: 'POST' });
+                    }
                     showFeedback(feedback, '💾 Guardado localmente. Se enviará al recuperar la conexión.', 'warn');
                     btnTerminar.textContent = '💾 Pendiente de envío';
                 }

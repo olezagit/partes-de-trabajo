@@ -18,9 +18,16 @@
  * Un elemento con 'grupo' en vez de 'name' es solo un separador visual
  * (no se guarda en BD), igual que los campos type='separate' de Dolibar.
  *
- * @return array{global: array, pm: array, man: array}
+ * @return array{global: array, pm: array, man: array, requeridos_si_maquina: array}
  */
 return array(
+
+    // Campos de la ficha técnica que pasan a ser OBLIGATORIOS cuando el
+    // producto de la línea tiene el extrafield "maquina" marcado
+    // (llx_product_extrafields.maquina). detalle.js bloquea el botón
+    // "Terminar parte" mientras alguno de estos campos esté vacío en una
+    // línea marcada como máquina.
+    'requeridos_si_maquina' => array('marca', 'modelo', 'nserie'),
 
     // Campos globales — se muestran siempre, sea cual sea el tipo de albarán
     'global' => array(

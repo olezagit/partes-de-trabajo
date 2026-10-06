@@ -220,6 +220,15 @@
 }
 .pd-tarea-ficha-badge + .pd-tarea-ficha-arrow { margin-left: 0; }
 
+/* Botón de ficha técnica cuando es obligatoria (línea vinculada a máquina) */
+.pd-tarea-ficha-btn--obligatoria {
+    border-color: #FDBA74;
+    background: #FFF7ED;
+    color: #9A3412;
+}
+.pd-tarea-ficha-btn--obligatoria:hover,
+.pd-tarea-ficha-btn--obligatoria:active { background: #FFEDD5; border-color: #FB923C; }
+
 /* ── Checkbox de tarea ───────────────────────────────────────────────── */
 .pd-tarea-check-wrap {
     display: flex; align-items: center; justify-content: center;
@@ -280,6 +289,25 @@
     background: #DCFCE7; color: #15803D;
 }
 
+/* Insignia "🔧 Máquina" en la cabecera de una tarea vinculada a un producto máquina */
+.pd-tarea-maquina-badge {
+    font-size: .8rem;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+/* Aviso dentro del modal de ficha técnica cuando es obligatoria */
+.pd-ficha-obligatoria-aviso {
+    margin: 0 18px 4px;
+    padding: 10px 12px;
+    background: #FFF7ED;
+    border: 1.5px solid #FDBA74;
+    border-radius: 10px;
+    color: #9A3412;
+    font-size: .8rem;
+    line-height: 1.4;
+}
+
 /* ── Filas de datos ──────────────────────────────────────────────────── */
 .pd-field-row {
     display: flex; align-items: flex-start;
@@ -334,6 +362,185 @@
     line-height: 1.5; white-space: pre-wrap;
     padding: 6px 0;
 }
+
+/* ── Línea añadida por el propio técnico: badge + acciones editar/eliminar ── */
+.pd-tarea-owner-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 8px;
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px dashed #E2E8F0;
+}
+.pd-tarea-owner-tag {
+    font-size: .7rem; font-weight: 700;
+    color: #7C3AED;
+    background: #F5F3FF;
+    border: 1px solid #DDD6FE;
+    border-radius: 999px;
+    padding: 2px 9px;
+    white-space: nowrap;
+}
+.pd-tarea-owner-actions {
+    display: flex; gap: 6px;
+}
+.pd-tarea-edit-btn,
+.pd-tarea-delete-btn {
+    padding: 6px 11px;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: .74rem; font-weight: 700;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+    transition: all .15s;
+}
+.pd-tarea-edit-btn {
+    border: 1.5px solid #BFDBFE;
+    background: #EFF6FF; color: #1D4ED8;
+}
+.pd-tarea-edit-btn:hover { background: #DBEAFE; }
+.pd-tarea-delete-btn {
+    border: 1.5px solid #FECACA;
+    background: #FEF2F2; color: #DC2626;
+}
+.pd-tarea-delete-btn:hover { background: #FEE2E2; }
+
+.pd-tarea-edit-form {
+    margin-top: 4px;
+    padding: 10px 12px;
+    background: #F8FAFC;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 10px;
+}
+.pd-tarea-edit-prod-lbl {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .78rem; font-weight: 600;
+    color: #475569;
+    margin-bottom: 4px;
+}
+
+/* ── Añadir línea (descriptiva / producto / servicio) ────────────────── */
+.pd-add-linea-wrap {
+    margin: 6px 8px 0;
+}
+.pd-add-linea-btn {
+    width: 100%;
+    padding: 11px 14px;
+    border: 1.5px dashed #CBD5E1;
+    border-radius: 10px;
+    background: #F8FAFC;
+    color: #334155;
+    font-family: 'IBM Plex Sans', system-ui, sans-serif;
+    font-size: .85rem; font-weight: 700;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.pd-add-linea-btn:hover,
+.pd-add-linea-btn:active { background: #EFF6FF; border-color: #93C5FD; }
+
+.pd-add-linea-form {
+    margin-top: 10px;
+    padding: 12px;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 12px;
+    background: #F8FAFC;
+}
+.pd-add-linea-tipos {
+    display: flex; gap: 8px; flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+.pd-add-linea-tipo-opt {
+    display: flex; align-items: center; gap: 6px;
+    padding: 7px 12px;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 999px;
+    background: #fff;
+    font-size: .8rem; font-weight: 600; color: #475569;
+    cursor: pointer;
+    transition: all .15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.pd-add-linea-tipo-opt:has(input:checked) {
+    background: #1D4ED8; border-color: #1D4ED8; color: #fff;
+}
+.pd-add-linea-tipo-opt input { accent-color: #1D4ED8; }
+
+.pd-add-linea-hint {
+    font-size: .74rem;
+    color: #64748B;
+    line-height: 1.4;
+    margin: 0 0 8px;
+}
+
+.pd-linea-resultados {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-top: 6px;
+    display: flex; flex-direction: column; gap: 4px;
+}
+.pd-linea-resultado-item {
+    display: flex; align-items: center; gap: 8px;
+    width: 100%;
+    padding: 9px 10px;
+    border: 1.5px solid #E2E8F0;
+    border-radius: 8px;
+    background: #fff;
+    font-family: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    -webkit-tap-highlight-color: transparent;
+}
+.pd-linea-resultado-item:hover,
+.pd-linea-resultado-item:active { background: #EFF6FF; border-color: #93C5FD; }
+.pd-linea-resultado-ref {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: .74rem; font-weight: 700; color: #4C1D95;
+    flex-shrink: 0;
+}
+.pd-linea-resultado-label {
+    font-size: .82rem; color: #334155;
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.pd-linea-resultado-maquina { flex-shrink: 0; font-size: .85rem; }
+.pd-linea-resultado-loading,
+.pd-linea-resultado-vacio {
+    padding: 10px; font-size: .8rem; color: #94A3B8; font-style: italic;
+}
+.pd-linea-resultado-err {
+    padding: 10px; font-size: .8rem; color: #B91C1C;
+}
+
+.pd-linea-seleccion {
+    display: flex; align-items: center; gap: 8px;
+    margin-top: 8px;
+    padding: 9px 10px;
+    background: #EFF6FF;
+    border: 1.5px solid #BFDBFE;
+    border-radius: 8px;
+    font-size: .82rem; color: #1D4ED8; font-weight: 600;
+}
+.pd-linea-seleccion span { flex: 1; min-width: 0; }
+.pd-linea-quitar {
+    flex-shrink: 0;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(29,78,216,.15);
+    color: #1D4ED8;
+    font-size: .68rem;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+}
+.pd-linea-quitar:hover { background: #FEE2E2; color: #DC2626; }
+
+.pd-add-linea-actions {
+    display: flex; gap: 8px;
+    margin-top: 12px;
+}
+.pd-add-linea-actions .pd-ficha-guardar-btn { flex: 2; }
+.pd-add-linea-actions .pd-nota-edit-cancel  { flex: 1; }
 
 /* ── Anotaciones ─────────────────────────────────────────────────────── */
 .pd-nota-previa {
@@ -1110,5 +1317,3 @@ select.pd-ficha-input { appearance: none; background: #fff url('data:image/svg+x
     text-align: center;
 }
 .pd-ficha-feedback.pd-feedback--error { color: #B91C1C; }
-
-

@@ -1,0 +1,249 @@
+/* ═══════════════════════════════════════════════════════════════════════════
+   Estadísticas — Partes de Trabajo (solo administradores)
+   Reutiliza las variables --pt-* definidas en css/partes.css (se carga junto
+   a este archivo en admin/estadisticas.php).
+   ═══════════════════════════════════════════════════════════════════════════ */
+
+.pe-btn-volver {
+    color: rgba(255,255,255,.85);
+    text-decoration: none;
+    font-size: .82rem;
+    font-weight: 600;
+    padding: 8px 14px;
+    border: 1.5px solid rgba(255,255,255,.25);
+    border-radius: 10px;
+    transition: background .18s;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+.pe-btn-volver:hover { background: rgba(255,255,255,.1); }
+
+/* ── Filtros de fecha ───────────────────────────────────────────────────── */
+.pe-filtros {
+    max-width: 1200px;
+    margin: 0 auto 24px;
+    padding: 0 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: end;
+    gap: 12px;
+}
+.pe-filtros label {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    font-size: .74rem;
+    font-weight: 600;
+    color: var(--pt-text-muted);
+    font-family: var(--pt-font);
+}
+.pe-filtros input[type="date"] {
+    padding: 8px 10px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 8px;
+    font-family: var(--pt-font);
+    font-size: .85rem;
+    background: var(--pt-surface);
+    color: var(--pt-text);
+}
+.pe-btn-filtrar {
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    background: var(--pt-accent);
+    color: #fff;
+    font-family: var(--pt-font);
+    font-size: .85rem;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background .18s;
+}
+.pe-btn-filtrar:hover { background: #2563EB; }
+.pe-btn-reset {
+    padding: 9px 14px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 8px;
+    background: var(--pt-surface);
+    color: var(--pt-text-muted);
+    font-family: var(--pt-font);
+    font-size: .82rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all .18s;
+}
+.pe-btn-reset:hover { border-color: #CBD5E1; color: var(--pt-text); }
+
+/* ── Tarjetas KPI ───────────────────────────────────────────────────────── */
+.pe-kpis {
+    max-width: 1200px;
+    margin: 0 auto 24px;
+    padding: 0 24px;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 14px;
+}
+.pe-kpi-card {
+    background: var(--pt-surface);
+    border: 1.5px solid var(--pt-border);
+    border-top: 4px solid;
+    border-radius: var(--pt-radius);
+    padding: 16px;
+    text-align: center;
+    box-shadow: var(--pt-shadow);
+    transition: transform .18s, box-shadow .18s;
+}
+.pe-kpi-card:hover { transform: translateY(-2px); box-shadow: var(--pt-shadow-hover); }
+.pe-kpi-icon { font-size: 1.4rem; margin-bottom: 6px; line-height: 1; }
+.pe-kpi-valor {
+    font-family: var(--pt-mono);
+    font-size: 1.9rem;
+    font-weight: 700;
+    line-height: 1;
+}
+.pe-kpi-label {
+    margin-top: 6px;
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--pt-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .03em;
+}
+
+/* ── Secciones ──────────────────────────────────────────────────────────── */
+.pe-section {
+    max-width: 1200px;
+    margin: 0 auto 20px;
+    padding: 20px 24px;
+    background: var(--pt-surface);
+    border: 1.5px solid var(--pt-border);
+    border-radius: var(--pt-radius);
+    box-shadow: var(--pt-shadow);
+}
+.pe-section-title {
+    font-size: 1rem;
+    font-weight: 700;
+    color: var(--pt-text);
+    margin: 0 0 16px;
+    font-family: var(--pt-font);
+}
+.pe-empty {
+    font-size: .85rem;
+    color: var(--pt-text-muted);
+    font-style: italic;
+    padding: 8px 0;
+    margin: 0;
+}
+.pe-nota {
+    font-size: .74rem;
+    color: var(--pt-text-muted);
+    margin: 12px 0 0;
+}
+
+/* ── Barras horizontales (desglose por tipo) ──────────────────────────────── */
+.pe-barras { display: flex; flex-direction: column; gap: 12px; }
+.pe-barra-row {
+    display: grid;
+    grid-template-columns: 160px 1fr 90px;
+    align-items: center;
+    gap: 12px;
+}
+.pe-barra-label { font-size: .85rem; color: var(--pt-text); font-weight: 600; }
+.pe-barra-track {
+    display: block;
+    height: 10px;
+    background: var(--pt-bg);
+    border-radius: 999px;
+    overflow: hidden;
+}
+.pe-barra-track--sm {
+    display: inline-block;
+    width: 70px;
+    height: 8px;
+    vertical-align: middle;
+    margin-right: 6px;
+}
+.pe-barra-fill {
+    display: block;
+    height: 100%;
+    border-radius: 999px;
+    transition: width .4s ease;
+}
+.pe-barra-valor {
+    font-family: var(--pt-mono);
+    font-size: .82rem;
+    color: var(--pt-text-muted);
+    text-align: right;
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .pe-barra-row { grid-template-columns: 1fr; gap: 4px; }
+    .pe-barra-valor { text-align: left; }
+}
+
+/* ── Tabla por técnico ─────────────────────────────────────────────────────── */
+.pe-tabla {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: .85rem;
+    font-family: var(--pt-font);
+}
+.pe-tabla th {
+    text-align: left;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: var(--pt-text-muted);
+    padding: 8px 10px;
+    border-bottom: 2px solid var(--pt-border);
+}
+.pe-tabla td {
+    padding: 10px;
+    border-bottom: 1px solid var(--pt-border);
+    color: var(--pt-text);
+}
+.pe-tabla tr:last-child td { border-bottom: none; }
+
+/* ── Gráfico mensual (barras verticales en CSS puro, sin librerías) ─────────── */
+.pe-chart {
+    display: flex;
+    align-items: flex-end;
+    gap: 10px;
+    height: 180px;
+    overflow-x: auto;
+    padding-top: 20px;
+}
+.pe-chart-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    height: 100%;
+    min-width: 34px;
+    flex-shrink: 0;
+}
+.pe-chart-valor {
+    font-family: var(--pt-mono);
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--pt-text);
+    margin-bottom: 4px;
+}
+.pe-chart-bar {
+    width: 22px;
+    background: linear-gradient(180deg, var(--pt-accent), #60A5FA);
+    border-radius: 4px 4px 0 0;
+    min-height: 4px;
+}
+.pe-chart-mes {
+    margin-top: 6px;
+    font-size: .68rem;
+    color: var(--pt-text-muted);
+    white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+    .pe-kpis { grid-template-columns: repeat(2, 1fr); padding: 0 12px; }
+    .pe-section { margin-left: 12px; margin-right: 12px; padding: 16px; }
+    .pe-filtros { padding: 0 12px; }
+}

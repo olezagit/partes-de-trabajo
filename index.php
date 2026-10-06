@@ -81,6 +81,14 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])
             require __DIR__.'/api/marcar_tarea.php';
         } elseif ($pt_action === 'linea_ficha') {
             require __DIR__.'/api/guardar_linea_extrafields.php';
+        } elseif ($pt_action === 'buscar_productos') {
+            require __DIR__.'/api/buscar_productos.php';
+        } elseif ($pt_action === 'agregar_linea') {
+            require __DIR__.'/api/agregar_linea.php';
+        } elseif ($pt_action === 'editar_linea') {
+            require __DIR__.'/api/editar_linea.php';
+        } elseif ($pt_action === 'eliminar_linea') {
+            require __DIR__.'/api/eliminar_linea.php';
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Accion desconocida: '.htmlspecialchars($pt_action)]);
@@ -291,7 +299,7 @@ sort($localidadesDistintas, SORT_STRING | SORT_FLAG_CASE);
 // DOL_URL_ROOT puede no incluir /htdocs/ dependiendo de la version/configuracion.
 $pt_self = dirname($_SERVER['PHP_SELF']);  // ej: /gestion/htdocs/custom/partes_trabajo
 $pt_base = rtrim($pt_self, '/');           // sin barra final
-$pt_v    = '?v=8.0'; // cache-busting: incrementar al desplegar cambios (v8.0: tuberias en pulgadas + cabecera empresa PDF)
+$pt_v    = '?v=8.3'; // cache-busting: incrementar al desplegar cambios (v8.3: panel de estadisticas para admins + boton en el listado)
 
 $moreheadcontent  = '<link rel="manifest" href="'.$pt_base.'/manifest.json">'."\n";
 $moreheadcontent .= '<meta name="theme-color" content="#0F172A">'."\n";
@@ -474,6 +482,10 @@ if ($esAdmin) {
 // Botón asignar (solo admins)
 if ($esAdmin) {
     print '  <button class="pt-btn-asignar" id="pt-btn-asignar">👤 Asignar</button>';
+}
+// Botón estadísticas (solo admins) — ve todos los estados, no solo los activos
+if ($esAdmin) {
+    print '  <a class="pt-btn-estadisticas" href="'.htmlspecialchars($pt_base).'/admin/estadisticas.php">📊 Estadísticas</a>';
 }
 print '</div>';
 
