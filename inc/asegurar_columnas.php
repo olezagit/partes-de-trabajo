@@ -5,7 +5,11 @@
  * Comprueba (y crea si hace falta) TODAS las columnas y tablas internas que
  * el módulo necesita en las tablas de extrafields de Dolibarr:
  *   - llx_commande_extrafields:     horadeinicio, horadefinalizacion,
- *                                   foto_1..foto_10
+ *                                   foto_1..foto_10, enviar_ok (marca si el
+ *                                   albarán debe enviarse por email al
+ *                                   cliente al cerrarse), enviado (evita
+ *                                   reenvíos), tec_firmante (técnico que
+ *                                   firmó el cierre)
  *   - llx_societe_extrafields:      telefono_2, telefono_3, telefono_4
  *                                   (la tabla entera puede no existir si
  *                                   nunca se creó ningún campo extra de
@@ -35,6 +39,16 @@
  * hiciera falta, degradar con gracia una consulta cuando una columna no se
  * pudo crear (p.ej. por falta de permisos ALTER TABLE/CREATE TABLE del
  * usuario de BD) en vez de que la petición entera falle.
+ *
+ * NOTA sobre enviar_ok/enviado/tec_firmante: api/terminar_parte.php las
+ * selecciona en UNA sola consulta junto con el resto de datos del pedido
+ * para decidir si envía el correo de cierre al cliente. Antes de que este
+ * archivo las gestionara, si esas tres columnas no existían todavía en una
+ * instalación, esa consulta fallaba ENTERA y el bloque de envío de correo
+ * se saltaba en silencio (sin error visible) — el cliente simplemente no
+ * recibía nunca el aviso, y nadie se enteraba de por qué. Se incluyen aquí
+ * por el mismo motivo que las demás: para que esa consulta nunca dependa de
+ * que alguien haya creado antes esas columnas a mano.
  */
 
 if (!function_exists('pt_tabla_existe')) {
@@ -182,7 +196,7 @@ if (!function_exists('pt_asegurar_columnas_modulo')) {
 
         // Incrementar este sufijo (V2, V3...) si en el futuro se añaden más
         // columnas que necesiten pasar otra vez por la comprobación.
-        $flag = 'PARTES_TRABAJO_SCHEMA_V2_OK';
+        $flag = 'PARTES_TRABAJO_SCHEMA_V3_OK';
         if (!empty($conf->global->$flag)) {
             // Ya se comprobó en una petición anterior y todo estaba
             // disponible: no hace falta volver a tocar INFORMATION_SCHEMA.
@@ -198,6 +212,11 @@ if (!function_exists('pt_asegurar_columnas_modulo')) {
         for ($i = 1; $i <= 10; $i++) {
             $pt_cols['foto_'.$i] = pt_asegurar_columna($db, MAIN_DB_PREFIX.'commande_extrafields', 'foto_'.$i, 'LONGTEXT DEFAULT NULL');
         }
+        // Usadas por api/terminar_parte.php para decidir y registrar el envío
+        // del correo de cierre al cliente (ver nota al principio del archivo).
+        $pt_cols['enviar_ok']    = pt_asegurar_columna($db, MAIN_DB_PREFIX.'commande_extrafields', 'enviar_ok',    'TINYINT DEFAULT 0');
+        $pt_cols['enviado']      = pt_asegurar_columna($db, MAIN_DB_PREFIX.'commande_extrafields', 'enviado',      'TINYINT DEFAULT 0');
+        $pt_cols['tec_firmante'] = pt_asegurar_columna($db, MAIN_DB_PREFIX.'commande_extrafields', 'tec_firmante', 'INTEGER DEFAULT NULL');
 
         // ── llx_societe_extrafields (tabla puede no existir todavía) ──────────
         foreach (array('telefono_2', 'telefono_3', 'telefono_4') as $col) {
@@ -238,7 +257,7 @@ if (!function_exists('pt_mapa_columnas_gestionadas_todas_ok')) {
      *  repetir ~50 consultas a INFORMATION_SCHEMA en cada petición. */
     function pt_mapa_columnas_gestionadas_todas_ok()
     {
-        $nombres = array('horadeinicio', 'horadefinalizacion', 'tarea_realizada', 'pt_creado_por', 'maquina');
+        $nombres = array('horadeinicio', 'horadefinalizacion', 'tarea_realizada', 'pt_creado_por', 'maquina', 'enviar_ok', 'enviado', 'tec_firmante');
         for ($i = 1; $i <= 10; $i++) $nombres[] = 'foto_'.$i;
         foreach (array('telefono_2', 'telefono_3', 'telefono_4') as $c) $nombres[] = $c;
 
