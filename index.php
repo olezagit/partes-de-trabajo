@@ -55,6 +55,21 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])
 
     if (!defined('PT_FROM_DISPATCHER')) define('PT_FROM_DISPATCHER', true);
 
+    // Autorreparación de esquema: crea (si hacen falta) las columnas internas
+    // que dan por hechas varias de las acciones de abajo (pt_creado_por,
+    // maquina, horadeinicio/horadefinalizacion, foto_1..10, telefono_2..4,
+    // campos de ficha técnica...). Sin esto, la cabecera o las líneas de un
+    // pedido pueden fallar ENTERAS si falta una sola columna en una
+    // instalación — es lo que causaba el 500 al abrir el detalle de un
+    // parte. Se ejecuta una sola vez por request (caché interno) y queda
+    // marcada en llx_const para no repetirse en peticiones futuras.
+    require_once __DIR__.'/inc/asegurar_columnas.php';
+    try {
+        pt_asegurar_columnas_modulo($db);
+    } catch (Throwable $e) {
+        error_log('PartesTrabajo: fallo en autorreparación de esquema: '.$e->getMessage());
+    }
+
     $pt_action = $_GET['pt_do'];
     try {
         if ($pt_action === 'partes') {

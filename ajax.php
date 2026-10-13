@@ -47,6 +47,17 @@ if (!$tiene_permiso) {
 // Dispatcher
 define('PT_FROM_DISPATCHER', true);
 
+// Autorreparación de esquema (ver inc/asegurar_columnas.php): este archivo es
+// un segundo punto de entrada independiente de index.php (usado como
+// respaldo por detalle.js), así que necesita la misma protección antes de
+// delegar en api/parte_detalle.php.
+require_once __DIR__.'/inc/asegurar_columnas.php';
+try {
+    pt_asegurar_columnas_modulo($db);
+} catch (Throwable $e) {
+    error_log('PartesTrabajo: fallo en autorreparación de esquema (ajax.php): '.$e->getMessage());
+}
+
 $action = isset($_GET['action']) ? $_GET['action'] : '';
 
 if ($action === 'partes') {
