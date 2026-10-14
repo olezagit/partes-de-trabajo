@@ -104,6 +104,8 @@ if (!empty($_SERVER['HTTP_X_REQUESTED_WITH'])
             require __DIR__.'/api/editar_linea.php';
         } elseif ($pt_action === 'eliminar_linea') {
             require __DIR__.'/api/eliminar_linea.php';
+        } elseif ($pt_action === 'estadisticas_tecnico') {
+            require __DIR__.'/api/estadisticas_tecnico.php';
         } else {
             http_response_code(400);
             echo json_encode(['error' => 'Accion desconocida: '.htmlspecialchars($pt_action)]);

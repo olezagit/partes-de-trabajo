@@ -247,3 +247,78 @@
     .pe-section { margin-left: 12px; margin-right: 12px; padding: 16px; }
     .pe-filtros { padding: 0 12px; }
 }
+
+/* ── Sección título con subtítulo ────────────────────────────────────────── */
+.pe-section-sub {
+    font-size: .74rem;
+    font-weight: 600;
+    color: var(--pt-text-muted);
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+/* ── Tabla "Por técnico": filas clicables que abren el detalle ───────────── */
+.pe-tabla--tecnicos .pe-tec-row {
+    cursor: pointer;
+    transition: background .15s;
+}
+.pe-tabla--tecnicos .pe-tec-row:hover,
+.pe-tabla--tecnicos .pe-tec-row:focus-visible {
+    background: var(--pt-bg);
+    outline: none;
+}
+.pe-tec-nombre { font-weight: 700; }
+.pe-tec-ver {
+    margin-left: 8px;
+    font-size: .72rem;
+    font-weight: 600;
+    color: var(--pt-accent);
+    white-space: nowrap;
+}
+
+/* ── Modal de detalle por técnico (reutiliza .pt-modal de partes.css) ────── */
+.pe-tec-kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 10px;
+    padding: 4px 4px 16px;
+}
+.pe-tec-kpi {
+    background: #fff;
+    border: 1.5px solid var(--pt-border);
+    border-top: 3px solid;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+}
+.pe-tec-kpi-valor {
+    font-family: var(--pt-mono);
+    font-size: 1.25rem;
+    font-weight: 700;
+    line-height: 1.1;
+}
+.pe-tec-kpi-label {
+    margin-top: 4px;
+    font-size: .66rem;
+    font-weight: 600;
+    color: var(--pt-text-muted);
+    text-transform: uppercase;
+    letter-spacing: .02em;
+}
+
+.pe-tec-tabla-wrap {
+    overflow-x: auto;
+    padding: 0 4px 8px;
+}
+.pe-tabla--detalle { white-space: nowrap; }
+.pe-tabla--detalle th, .pe-tabla--detalle td { padding: 8px; font-size: .8rem; }
+.pe-tec-link { color: var(--pt-accent); font-weight: 700; text-decoration: none; }
+.pe-tec-link:hover { text-decoration: underline; }
+.pe-tec-refcli { font-size: .7rem; color: var(--pt-text-muted); font-weight: 400; white-space: normal; }
+.pe-tec-estado { font-weight: 700; }
+.pe-tec-horas { font-family: var(--pt-mono); font-weight: 700; }
+
+@media (max-width: 600px) {
+    .pe-tec-kpis { grid-template-columns: repeat(2, 1fr); }
+    .pe-tec-ver { display: block; margin-left: 0; margin-top: 2px; }
+}

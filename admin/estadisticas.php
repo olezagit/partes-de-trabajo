@@ -119,29 +119,71 @@ if ($resTipos) {
     $db->free($resTipos);
 }
 
-// ─── 5. Desglose por técnico asignado (un pedido puede tener varios) ──────────
-$sqlTec  = "SELECT u.rowid, u.firstname, u.lastname, u.login,";
-$sqlTec .= "  COUNT(DISTINCT c.rowid) AS total,";
-$sqlTec .= "  SUM(CASE WHEN c.fk_statut = 3 THEN 1 ELSE 0 END) AS terminados";
-$sqlTec .= " FROM ".MAIN_DB_PREFIX."actioncomm_resources acr";
-$sqlTec .= " INNER JOIN ".MAIN_DB_PREFIX."actioncomm ac ON ac.id = acr.fk_actioncomm AND ac.elementtype = 'order'";
-$sqlTec .= " INNER JOIN ".MAIN_DB_PREFIX."commande c ON c.rowid = ac.fk_element";
-$sqlTec .= " INNER JOIN ".MAIN_DB_PREFIX."user u ON u.rowid = acr.fk_element AND acr.element_type = 'user'";
-$sqlTec .= " WHERE ".$whereBase;
-$sqlTec .= " GROUP BY u.rowid, u.firstname, u.lastname, u.login";
-$sqlTec .= " ORDER BY total DESC";
+// ─── 5. Desglose por técnico (SOLO grupo "SERVICIO TÉCNICO") ──────────────────
+// Se parte de los USUARIOS del grupo (no de las asignaciones) con LEFT JOIN
+// hacia sus partes, para que un técnico sin nada asignado en el rango de
+// fechas también aparezca en la lista, con todo a cero, en vez de desaparecer
+// silenciosamente. Un mismo pedido puede tener varios técnicos asignados.
+require_once __DIR__.'/../inc/config_grupos.php';
+require_once __DIR__.'/../inc/helpers_horas.php';
+
+$sqlTec  = "SELECT u.rowid AS user_id, u.firstname, u.lastname, u.login,";
+$sqlTec .= "  c.rowid AS commande_id, c.fk_statut, c.facture,";
+$sqlTec .= "  ef.horadeinicio, ef.horadefinalizacion,";
+$sqlTec .= "  ef.firma_cliente, ef.firma_tecnico";
+$sqlTec .= " FROM ".MAIN_DB_PREFIX."user u";
+$sqlTec .= " INNER JOIN ".MAIN_DB_PREFIX."usergroup_user gu";
+$sqlTec .= "         ON gu.fk_user = u.rowid AND gu.fk_usergroup = ".(int) PT_GRUPO_SERVICIO_TECNICO_ID;
+$sqlTec .= " LEFT JOIN ".MAIN_DB_PREFIX."actioncomm_resources acr";
+$sqlTec .= "         ON acr.fk_element = u.rowid AND acr.element_type = 'user'";
+$sqlTec .= " LEFT JOIN ".MAIN_DB_PREFIX."actioncomm ac";
+$sqlTec .= "         ON ac.id = acr.fk_actioncomm AND ac.elementtype = 'order'";
+$sqlTec .= " LEFT JOIN ".MAIN_DB_PREFIX."commande c";
+$sqlTec .= "         ON c.rowid = ac.fk_element AND ".$whereBase;
+$sqlTec .= " LEFT JOIN ".MAIN_DB_PREFIX."commande_extrafields ef ON ef.fk_object = c.rowid";
+$sqlTec .= " WHERE u.entity IN (".getEntity('user').")";
+$sqlTec .= " ORDER BY u.lastname ASC, u.firstname ASC";
 $resTec = $db->query($sqlTec);
-$porTecnico = array();
+
+$porTecnico = array(); // user_id => datos agregados
 if ($resTec) {
     while ($row = $db->fetch_object($resTec)) {
-        $porTecnico[] = array(
-            'nombre'     => trim($row->firstname.' '.$row->lastname) ?: $row->login,
-            'total'      => (int) $row->total,
-            'terminados' => (int) $row->terminados,
-        );
+        $uid = (int) $row->user_id;
+        if (!isset($porTecnico[$uid])) {
+            $porTecnico[$uid] = array(
+                'id'              => $uid,
+                'nombre'          => trim($row->firstname.' '.$row->lastname) ?: $row->login,
+                'total'           => 0,
+                'terminados'      => 0,
+                'pendientes'      => 0,
+                'cancelados'      => 0,
+                'facturados'      => 0,
+                'firmados'        => 0,
+                'horas_totales'   => 0.0,
+                'horas_n'         => 0, // nº de albaranes con horas registradas (para la media)
+            );
+        }
+        // LEFT JOIN sin pedidos en el rango -> commande_id es NULL: no contar nada
+        if ($row->commande_id === null) continue;
+
+        $porTecnico[$uid]['total']++;
+        $statut = (int) $row->fk_statut;
+        if ($statut === 3)       $porTecnico[$uid]['terminados']++;
+        elseif ($statut === -1)  $porTecnico[$uid]['cancelados']++;
+        else                     $porTecnico[$uid]['pendientes']++; // 0=borrador, 1=validado, 2=en proceso
+
+        if (!empty($row->facture)) $porTecnico[$uid]['facturados']++;
+        if (!empty($row->firma_cliente) || !empty($row->firma_tecnico)) $porTecnico[$uid]['firmados']++;
+
+        $horas = pt_horas_entre($row->horadeinicio, $row->horadefinalizacion);
+        if ($horas !== null) {
+            $porTecnico[$uid]['horas_totales'] += $horas;
+            $porTecnico[$uid]['horas_n']++;
+        }
     }
     $db->free($resTec);
 }
+$porTecnico = array_values($porTecnico);
 
 // ─── 6. Evolución mensual dentro del rango filtrado ───────────────────────────
 $sqlMes  = "SELECT DATE_FORMAT(c.date_commande, '%Y-%m') AS ym, COUNT(*) AS n";
@@ -164,10 +206,16 @@ $maxMes = $porMes ? max($porMes) : 0;
 // /htdocs/ según la instalación).
 $pt_self = dirname(dirname($_SERVER['PHP_SELF']));
 $pt_base = rtrim($pt_self, '/');
-$pt_v    = '?v=8.3';
+$pt_v    = '?v=8.4'; // v8.4: detalle por técnico (grupo Servicio Técnico) al hacer clic
 
 $moreheadcontent  = '<link rel="stylesheet" href="'.$pt_base.'/css/partes.css'.$pt_v.'">'."\n";
 $moreheadcontent .= '<link rel="stylesheet" href="'.$pt_base.'/css/estadisticas.css'.$pt_v.'">'."\n";
+$moreheadcontent .= '<script>'."\n";
+$moreheadcontent .= '  window.PT_BASE = "'.$pt_base.'";'."\n";
+$moreheadcontent .= '  window.PT_ESTAD_FECHA_DESDE = "'.$fechaDesde.'";'."\n";
+$moreheadcontent .= '  window.PT_ESTAD_FECHA_HASTA = "'.$fechaHasta.'";'."\n";
+$moreheadcontent .= '</script>'."\n";
+$moreheadcontent .= '<script defer src="'.$pt_base.'/js/estadisticas.js'.$pt_v.'"></script>'."\n";
 
 llxHeader($moreheadcontent, 'Estadísticas - Partes de Trabajo');
 
@@ -232,25 +280,30 @@ foreach ($tipoInfo as $tId => $tData) {
 print '  </div>';
 print '</div>';
 
-// Desglose por técnico
+// Desglose por técnico — SOLO grupo "SERVICIO TÉCNICO". Cada fila es
+// clicable: abre un panel con el detalle completo de ese técnico (albaranes
+// uno a uno, horas por albarán y totales) vía js/estadisticas.js.
 print '<div class="pe-section">';
-print '  <h2 class="pe-section-title">👥 Por técnico</h2>';
+print '  <h2 class="pe-section-title">👥 Por técnico <span class="pe-section-sub">(grupo Servicio Técnico)</span></h2>';
 if (empty($porTecnico)) {
-    print '  <p class="pe-empty">No hay partes asignados a ningún técnico en este rango de fechas.</p>';
+    print '  <p class="pe-empty">No hay empleados en el grupo "Servicio Técnico".</p>';
 } else {
-    print '  <table class="pe-tabla">';
-    print '    <tr><th>Técnico</th><th>Total asignados</th><th>Terminados</th><th>% completado</th></tr>';
+    print '  <table class="pe-tabla pe-tabla--tecnicos">';
+    print '    <tr><th>Técnico</th><th>Asignados</th><th>Terminados</th><th>Pendientes</th><th>Cancelados</th><th>Horas totales</th><th>% completado</th></tr>';
     foreach ($porTecnico as $t) {
         $pctT = $t['total'] > 0 ? round(($t['terminados'] / $t['total']) * 100) : 0;
-        print '    <tr>';
-        print '      <td>'.htmlspecialchars($t['nombre']).'</td>';
+        print '    <tr class="pe-tec-row" data-tecnico-id="'.(int) $t['id'].'" data-tecnico-nombre="'.htmlspecialchars($t['nombre']).'" tabindex="0" role="button">';
+        print '      <td class="pe-tec-nombre">'.htmlspecialchars($t['nombre']).' <span class="pe-tec-ver">Ver detalle →</span></td>';
         print '      <td>'.$t['total'].'</td>';
         print '      <td>'.$t['terminados'].'</td>';
+        print '      <td>'.$t['pendientes'].'</td>';
+        print '      <td>'.$t['cancelados'].'</td>';
+        print '      <td>'.htmlspecialchars(pt_formatear_horas($t['horas_totales'] > 0 ? $t['horas_totales'] : null)).'</td>';
         print '      <td><span class="pe-barra-track pe-barra-track--sm"><span class="pe-barra-fill" style="width:'.$pctT.'%;background:#16A34A"></span></span> '.$pctT.'%</td>';
         print '    </tr>';
     }
     print '  </table>';
-    print '  <p class="pe-nota">Un mismo parte puede contar para varios técnicos si tiene más de uno asignado.</p>';
+    print '  <p class="pe-nota">Un mismo parte puede contar para varios técnicos si tiene más de uno asignado. Haz clic en un técnico para ver su detalle completo.</p>';
 }
 print '</div>';
 
