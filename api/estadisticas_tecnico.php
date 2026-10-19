@@ -144,6 +144,12 @@ while ($row = $db->fetch_object($resql)) {
 
     $albaranes[] = array(
         'rowid'          => (int) $row->rowid,
+        // Valores "crudos" para que js/estadisticas.js pueda ordenar y filtrar
+        // por cada columna sin tener que interpretar los textos ya formateados.
+        'tipo_id'        => $tipoId,
+        'fecha_ts'       => $row->date_commande ? (int) $row->date_commande : null,
+        'inicio_ts'      => pt_ts_o_null($row->horadeinicio),
+        'fin_ts'         => pt_ts_o_null($row->horadefinalizacion),
         'ref'            => $row->ref,
         'ref_client'     => $row->ref_client ?? '',
         'cliente'        => $row->soc_nom ?? '',

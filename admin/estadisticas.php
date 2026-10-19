@@ -206,7 +206,7 @@ $maxMes = $porMes ? max($porMes) : 0;
 // /htdocs/ según la instalación).
 $pt_self = dirname(dirname($_SERVER['PHP_SELF']));
 $pt_base = rtrim($pt_self, '/');
-$pt_v    = '?v=8.4'; // v8.4: detalle por técnico (grupo Servicio Técnico) al hacer clic
+$pt_v    = '?v=8.5'; // v8.5: ordenar y filtrar por columna en el detalle de cada técnico
 
 $moreheadcontent  = '<link rel="stylesheet" href="'.$pt_base.'/css/partes.css'.$pt_v.'">'."\n";
 $moreheadcontent .= '<link rel="stylesheet" href="'.$pt_base.'/css/estadisticas.css'.$pt_v.'">'."\n";

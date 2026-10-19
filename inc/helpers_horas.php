@@ -40,6 +40,20 @@ if (!function_exists('pt_horas_entre')) {
     }
 }
 
+if (!function_exists('pt_ts_o_null')) {
+    /** Timestamp UNIX de un valor datetime-local, o null si está vacío o no es válido. */
+    function pt_ts_o_null($valor)
+    {
+        $valor = trim((string) $valor);
+        if ($valor === '') return null;
+        try {
+            return (new DateTime($valor))->getTimestamp();
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+}
+
 if (!function_exists('pt_formatear_horas')) {
     /** Formatea un número de horas (float) como "Xh Ym" para mostrar en UI. */
     function pt_formatear_horas($horas)
