@@ -379,3 +379,102 @@
 .pe-f-input[type="date"] { display: block; margin-bottom: 4px; min-width: 128px; }
 .pe-f-input--num { display: block; margin-bottom: 4px; min-width: 76px; }
 .pe-f-input:focus { outline: 2px solid var(--pt-accent); outline-offset: -1px; }
+
+/* ═══ Vista de administración: más filtros e indicadores ══════════════════════ */
+
+/* Atajos de periodo */
+.pe-atajos {
+    max-width: 1200px;
+    margin: 0 auto 10px;
+    padding: 0 24px;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.pe-atajos-lbl { font-size: .74rem; font-weight: 600; color: var(--pt-text-muted); font-family: var(--pt-font); }
+.pe-atajo {
+    padding: 5px 12px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 999px;
+    background: var(--pt-surface);
+    color: var(--pt-text);
+    font-family: var(--pt-font);
+    font-size: .76rem;
+    font-weight: 600;
+    text-decoration: none;
+    transition: all .15s;
+}
+.pe-atajo:hover { border-color: var(--pt-accent); color: var(--pt-accent); }
+.pe-atajo--activo { background: var(--pt-accent); border-color: var(--pt-accent); color: #fff; }
+.pe-atajo--activo:hover { color: #fff; }
+
+/* Selectores y buscador del formulario de filtros */
+.pe-filtros select,
+.pe-filtros input[type="search"] {
+    padding: 8px 10px;
+    border: 1.5px solid var(--pt-border);
+    border-radius: 8px;
+    font-family: var(--pt-font);
+    font-size: .85rem;
+    background: var(--pt-surface);
+    color: var(--pt-text);
+    min-width: 120px;
+}
+.pe-filtro-buscar { flex: 1 1 220px; }
+.pe-filtro-buscar input { width: 100%; box-sizing: border-box; }
+.pe-filtros-activos {
+    max-width: 1200px;
+    margin: -8px auto 16px;
+    padding: 0 24px;
+    font-size: .8rem;
+    font-weight: 600;
+    color: var(--pt-accent);
+    font-family: var(--pt-font);
+}
+
+/* Indicadores de gestión (dentro de una sección, sin márgenes laterales propios) */
+.pe-kpis--inline { max-width: none; margin: 0; padding: 0; }
+.pe-kpi-sub { margin-top: 4px; font-size: .66rem; color: var(--pt-text-muted); }
+
+/* Por tipo: línea extra con terminados y horas */
+.pe-barra-row--tipo { grid-template-columns: 160px 1fr 90px 210px; }
+.pe-barra-extra { font-size: .76rem; color: var(--pt-text-muted); white-space: nowrap; font-family: var(--pt-font); }
+@media (max-width: 800px) {
+    .pe-barra-row--tipo { grid-template-columns: 1fr; gap: 4px; }
+}
+
+/* Cabeceras ordenables en las tablas de la página principal */
+.pe-tabla--ordenable thead th { white-space: nowrap; }
+
+/* Evolución mensual: dos series (partes y terminados) + horas */
+.pe-leyenda {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin: 0 0 6px;
+    font-size: .74rem;
+    color: var(--pt-text-muted);
+    font-family: var(--pt-font);
+}
+.pe-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 4px; vertical-align: middle; }
+.pe-chart { height: 230px; }
+.pe-chart-col { min-width: 52px; }
+.pe-chart-bars {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 3px;
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+}
+.pe-chart-bars .pe-chart-bar { width: 15px; }
+.pe-chart-bar--term { background: linear-gradient(180deg, #7C3AED, #A78BFA); }
+.pe-chart-valor small { font-weight: 500; color: var(--pt-text-muted); }
+.pe-chart-horas { margin-top: 2px; font-size: .64rem; color: var(--pt-text-muted); white-space: nowrap; font-family: var(--pt-mono); }
+
+@media (max-width: 600px) {
+    .pe-atajos { padding: 0 12px; }
+    .pe-filtros-activos { padding: 0 12px; }
+}

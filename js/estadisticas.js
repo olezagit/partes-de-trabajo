@@ -9,10 +9,13 @@
 let peModalEl = null;
 
 function peInit() {
+    peInitTablasOrdenables();
+
     const tabla = document.querySelector('.pe-tabla--tecnicos');
     if (!tabla) return; // no hay técnicos en el grupo: nada que conectar
 
     tabla.addEventListener('click', e => {
+        if (e.target.closest('thead')) return; // los títulos ordenan, no abren detalle
         const row = e.target.closest('.pe-tec-row');
         if (row) peAbrirDetalle(row.dataset.tecnicoId, row.dataset.tecnicoNombre);
     });
@@ -23,6 +26,53 @@ function peInit() {
         if (!row) return;
         e.preventDefault();
         peAbrirDetalle(row.dataset.tecnicoId, row.dataset.tecnicoNombre);
+    });
+}
+
+/**
+ * Tablas de la página principal (por técnico, por cliente): clic en el título
+ * de una columna ordena por ella (otro clic invierte). El valor de cada celda
+ * es su atributo data-val si lo tiene (p. ej. horas en número, no "3h 45m");
+ * si no, su texto. Las celdas vacías van siempre al final.
+ */
+function peInitTablasOrdenables() {
+    document.querySelectorAll('.pe-tabla--ordenable').forEach(tabla => {
+        const ths = Array.from(tabla.querySelectorAll('thead th'));
+        let colActiva = -1, dir = 'asc';
+
+        ths.forEach((th, idx) => {
+            th.querySelector('.pe-th-sort')?.addEventListener('click', () => {
+                dir = (colActiva === idx && dir === 'asc') ? 'desc' : 'asc';
+                colActiva = idx;
+                const numerico = th.dataset.sort === 'num';
+                const valor = tr => {
+                    const td = tr.children[idx];
+                    const v = td.dataset.val !== undefined ? td.dataset.val : td.textContent.trim();
+                    if (v === '') return null;
+                    if (numerico) { const n = parseFloat(String(v).replace(',', '.')); return isNaN(n) ? null : n; }
+                    return String(v).toLowerCase();
+                };
+                const tbody = tabla.querySelector('tbody');
+                const filas = Array.from(tbody.querySelectorAll('tr'));
+                filas.sort((a, b) => {
+                    const va = valor(a), vb = valor(b);
+                    if (va === null && vb === null) return 0;
+                    if (va === null) return 1;
+                    if (vb === null) return -1;
+                    const r = numerico ? va - vb : va.localeCompare(vb, 'es', { numeric: true, sensitivity: 'base' });
+                    return dir === 'asc' ? r : -r;
+                });
+                filas.forEach(f => tbody.appendChild(f));
+
+                ths.forEach((t, i) => {
+                    const activa = i === idx;
+                    t.querySelector('.pe-th-sort')?.classList.toggle('pe-th-sort--activo', activa);
+                    const fl = t.querySelector('.pe-th-flecha');
+                    if (fl) fl.textContent = activa ? (dir === 'asc' ? '▲' : '▼') : '↕';
+                    t.setAttribute('aria-sort', activa ? (dir === 'asc' ? 'ascending' : 'descending') : 'none');
+                });
+            });
+        });
     });
 }
 
