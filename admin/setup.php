@@ -5,6 +5,9 @@
  * Permite al administrador configurar:
  *  - El mapeo entre el valor numérico de ef.tipo_albaran y la etiqueta/color
  *  - Los estados de llx_commande que se consideran "activos" (visibles)
+ *  - La plantilla PDF (modelo de documento de pedidos) con la que se genera el
+ *    PDF que se adjunta/envía al cliente al terminar el parte, por cada tipo.
+ *    Si un tipo no tiene plantilla definida se usa la predeterminada.
  */
 
 $res = 0;
@@ -21,15 +24,27 @@ if (!$user->admin) {
     accessforbidden();
 }
 
-$langs->loadLangs(array('partes_trabajo@partes_trabajo', 'admin'));
+require_once DOL_DOCUMENT_ROOT.'/core/modules/commande/modules_commande.php';
+
+$langs->loadLangs(array('partes_trabajo@partes_trabajo', 'admin', 'orders'));
 $action = GETPOST('action', 'aZ09');
+
+// ── Plantillas PDF disponibles (las activadas en Pedidos → Plantillas de documentos) ──
+// Incluye también las plantillas propias colocadas en custom/<modulo>/core/modules/commande/doc/
+// siempre que estén activadas en esa pantalla de Dolibarr.
+$modelosPdf = array();
+$listaModelos = ModelePDFCommandes::liste_modeles($db);
+if (is_array($listaModelos)) {
+    $modelosPdf = $listaModelos; // nombre_modelo => descripción
+}
+$modeloPdfDefecto = !empty($conf->global->COMMANDE_ADDON_PDF) ? $conf->global->COMMANDE_ADDON_PDF : 'eratosthene';
 
 // ── Guardar ───────────────────────────────────────────────────────────────────
 if ($action === 'save') {
     // Statuts activos (checkboxes)
     $statuts = array();
     // Para admins, el estado 3 puede ser visible desde el setup
-foreach (array(1, 2, 3) as $s) {
+    foreach (array(1, 2, 3) as $s) {
         if (GETPOST('statut_'.$s, 'int')) $statuts[] = $s;
     }
     dolibarr_set_const($db, 'PARTES_STATUTS_ACTIVOS', implode(',', $statuts), 'chaine', 0, '', $conf->entity);
@@ -39,6 +54,16 @@ foreach (array(1, 2, 3) as $s) {
         $label = trim(GETPOST('tipo_label_'.$t, 'alphanohtml'));
         if ($label !== '') {
             dolibarr_set_const($db, 'PARTES_TIPO_LABEL_'.$t, $label, 'chaine', 0, '', $conf->entity);
+        }
+    }
+
+    // Plantilla PDF por tipo de parte. Vacío = predeterminada → se elimina la constante.
+    foreach (array(1, 2, 3, 4) as $t) {
+        $modelo = trim(GETPOST('pdf_model_'.$t, 'aZ09'));
+        if ($modelo !== '' && isset($modelosPdf[$modelo])) {
+            dolibarr_set_const($db, 'PARTES_PDF_MODEL_'.$t, $modelo, 'chaine', 0, '', $conf->entity);
+        } else {
+            dolibarr_del_const($db, 'PARTES_PDF_MODEL_'.$t, $conf->entity);
         }
     }
 
@@ -62,6 +87,12 @@ $tipo_labels_default = array(
 $tipo_labels = array();
 foreach ($tipo_labels_default as $id => $def) {
     $tipo_labels[$id] = $conf->global->{'PARTES_TIPO_LABEL_'.$id} ?? $def;
+}
+
+// Plantilla PDF guardada por tipo ('' = predeterminada)
+$tipo_pdf_model = array();
+foreach ($tipo_labels_default as $id => $def) {
+    $tipo_pdf_model[$id] = $conf->global->{'PARTES_PDF_MODEL_'.$id} ?? '';
 }
 
 // Colores e iconos fijos (referencia visual)
@@ -141,7 +172,50 @@ print '</table>';
 print '<p class="opacitymedium" style="padding:8px 0 0 4px">Los colores e iconos son fijos en el módulo. Si necesitas cambiarlos edita el array <code>$tipos</code> en <code>index.php</code>, <code>api/partes.php</code> y <code>js/app.js</code>.</p>';
 print dol_get_fiche_end();
 
-// ── Sección 4: referencia de tablas ──────────────────────────────────────────
+// ── Sección 4: plantilla PDF por tipo de parte ───────────────────────────────
+print dol_get_fiche_head(array(), '', 'Plantilla PDF del albarán que se envía al cliente', -1);
+print '<table class="noborder centpercent">';
+print '<tr class="liste_titre"><th style="width:60px">Valor BD</th><th style="width:200px">Tipo de parte</th><th>Plantilla PDF</th><th class="hideonsmartphone">Fichero</th></tr>';
+$hayModeloHuerfano = false;
+foreach ($tipo_labels as $id => $label) {
+    $info     = $tipo_info[$id];
+    $guardado = $tipo_pdf_model[$id];
+    $existe   = ($guardado === '' || isset($modelosPdf[$guardado]));
+    if (!$existe) $hayModeloHuerfano = true;
+
+    print '<tr class="oddeven">';
+    print '  <td style="text-align:center"><code>'.$id.'</code></td>';
+    print '  <td>'.$info['icon'].' '.htmlspecialchars($label).'</td>';
+    print '  <td>';
+    print '    <select name="pdf_model_'.$id.'" class="minwidth200">';
+    print '      <option value=""'.($guardado === '' ? ' selected' : '').'>— Predeterminada —</option>';
+    foreach ($modelosPdf as $nombreModelo => $descModelo) {
+        $sel = ($guardado === $nombreModelo) ? ' selected' : '';
+        print '      <option value="'.htmlspecialchars($nombreModelo).'"'.$sel.'>'
+              .htmlspecialchars($descModelo ?: $nombreModelo).' ('.htmlspecialchars($nombreModelo).')</option>';
+    }
+    if (!$existe) {
+        // La plantilla guardada ya no está activa/instalada: se muestra para que sea visible
+        print '      <option value="'.htmlspecialchars($guardado).'" selected>⚠️ '.htmlspecialchars($guardado).' (no disponible)</option>';
+    }
+    print '    </select>';
+    print '  </td>';
+    print '  <td class="hideonsmartphone opacitymedium"><code>pdf_'.htmlspecialchars($guardado !== '' ? $guardado : $modeloPdfDefecto).'.modules.php</code></td>';
+    print '</tr>';
+}
+print '</table>';
+print '<p class="opacitymedium" style="padding:8px 0 0 4px">';
+print 'Al terminar el parte, el PDF que se adjunta al correo (y se envía al cliente) se genera con la plantilla elegida para su tipo. ';
+print 'Con <strong>Predeterminada</strong> se usa la plantilla que ya tenga el propio pedido o, si no tiene ninguna, la configurada por defecto en Dolibarr (actualmente <code>'.htmlspecialchars($modeloPdfDefecto).'</code>). ';
+print 'Solo aparecen las plantillas activadas en <em>Inicio → Configuración → Módulos → Pedidos → Plantillas de documentos</em>; ';
+print 'si instalas una plantilla propia en <code>custom/…/core/modules/commande/doc/</code>, actívala allí para que aparezca en esta lista.';
+print '</p>';
+if ($hayModeloHuerfano) {
+    print '<p style="padding:4px 0 0 4px;color:#B45309">⚠️ Alguna plantilla guardada ya no está disponible. Mientras tanto, esos partes se generarán con la plantilla predeterminada. Elige otra y guarda para corregirlo.</p>';
+}
+print dol_get_fiche_end();
+
+// ── Sección 5: referencia de tablas ──────────────────────────────────────────
 print dol_get_fiche_head(array(), '', 'Referencia de tablas de base de datos', -1);
 print '<table class="noborder centpercent">';
 print '<tr class="liste_titre"><th>Tabla</th><th>Campo clave</th><th>Uso en el módulo</th></tr>';

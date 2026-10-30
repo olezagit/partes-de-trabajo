@@ -147,10 +147,20 @@ $db->query($sqlNota);
 // modelo que usa Dolibarr (pdf_eratosthene u otro configurado en el sistema).
 $pdfGenerado = false;
 $pdfErrorMsg = '';
+$modeloPdf    = '';
+$modeloOrigen = 'predeterminada';
+
+// Tipo de parte (decide qué plantilla PDF se usa, ver admin/setup.php)
+$tipoAlbaran = 0;
+$resTipoPdf  = $db->query("SELECT tipo_albaran FROM ".MAIN_DB_PREFIX."commande_extrafields WHERE fk_object = ".$parteId);
+if ($resTipoPdf && $db->num_rows($resTipoPdf) > 0) {
+    $tipoAlbaran = (int)$db->fetch_object($resTipoPdf)->tipo_albaran;
+}
 
 try {
     require_once DOL_DOCUMENT_ROOT.'/commande/class/commande.class.php';
     require_once DOL_DOCUMENT_ROOT.'/core/lib/files.lib.php';
+    require_once DOL_DOCUMENT_ROOT.'/core/modules/commande/modules_commande.php';
 
     require_once DOL_DOCUMENT_ROOT.'/commande/class/commande.class.php';
 
@@ -159,10 +169,27 @@ try {
         $objCommande->fetch_thirdparty();
         $objCommande->fetch_lines();  // imprescindible: TCPDF itera las líneas del pedido
 
-        // Usar modelo configurado en Dolibarr o fallback a eratosthene
+        // Plantilla predeterminada: la del propio pedido, o la de Dolibarr, o eratosthene
         $modeloPdf = !empty($objCommande->modelpdf)
             ? $objCommande->modelpdf
             : (!empty($conf->global->COMMANDE_ADDON_PDF) ? $conf->global->COMMANDE_ADDON_PDF : 'eratosthene');
+
+        // Plantilla configurada en admin/setup.php para este tipo de parte
+        // (PARTES_PDF_MODEL_<tipo>). Si no hay ninguna, o ya no está disponible,
+        // se mantiene la predeterminada.
+        if ($tipoAlbaran >= 1 && $tipoAlbaran <= 4) {
+            $modeloCfg = trim((string)($conf->global->{'PARTES_PDF_MODEL_'.$tipoAlbaran} ?? ''));
+            if ($modeloCfg !== '') {
+                $disponibles = ModelePDFCommandes::liste_modeles($db);
+                if (is_array($disponibles) && isset($disponibles[$modeloCfg])) {
+                    $modeloPdf    = $modeloCfg;
+                    $modeloOrigen = 'configurada (tipo '.$tipoAlbaran.')';
+                } else {
+                    error_log('PartesTrabajo: la plantilla PDF "'.$modeloCfg.'" configurada para el tipo '
+                        .$tipoAlbaran.' no está disponible; se usa la predeterminada ('.$modeloPdf.')');
+                }
+            }
+        }
 
         // Eliminar PDFs previos para asegurar que el adjunto incluye las firmas
         $dirPrevia = DOL_DATA_ROOT.'/commande/'.$objCommande->ref.'/';
@@ -350,7 +377,9 @@ if ($objMail && $objMail->enviado == 0) {
         $cuerpoAdmin .= '<p>Ruta buscada: '.htmlspecialchars($dirPdf).'</p>'
             .'<p>Por favor, genera el PDF manualmente desde Dolibarr y envíalo al cliente si procede.</p>';
     } else {
-        $cuerpoAdmin .= '<p>✅ PDF adjunto: <strong>'.htmlspecialchars($pdfName).'</strong></p>';
+        $cuerpoAdmin .= '<p>✅ PDF adjunto: <strong>'.htmlspecialchars($pdfName).'</strong>'
+            .($modeloPdf !== '' ? ' <em>(plantilla: '.htmlspecialchars($modeloPdf).', '.htmlspecialchars($modeloOrigen).')</em>' : '')
+            .'</p>';
     }
 
     $cuerpoAdmin .= $firmaCorp;
@@ -387,6 +416,8 @@ echo json_encode([
     'fecha_firma'    => $fechaFirma,
     'tecnico'        => $nombreTecnico,
     'pdf_generado'   => $pdfGenerado,
+    'pdf_modelo'     => $modeloPdf,
+    'pdf_modelo_origen' => $modeloOrigen,
     'pdf_encontrado' => isset($tienePdf) ? $tienePdf   : false,
     'pdf_nombre'     => isset($pdfName)  ? $pdfName    : '',
     'fichas_pdf_generadas' => $fichasResultado['generados'],
