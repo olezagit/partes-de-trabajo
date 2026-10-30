@@ -22,6 +22,22 @@ if (!defined('PT_FROM_DISPATCHER')) {
 require_once __DIR__.'/../inc/config_grupos.php';
 require_once __DIR__.'/../inc/helpers_horas.php';
 
+// Red de seguridad: si en el servidor quedó una versión antigua de
+// inc/helpers_horas.php (despliegue parcial o caché de opcode) sin esta
+// función, se define aquí para no devolver un 500. Idéntica a la del helper.
+if (!function_exists('pt_ts_o_null')) {
+    function pt_ts_o_null($valor)
+    {
+        $valor = trim((string) $valor);
+        if ($valor === '') return null;
+        try {
+            return (new DateTime($valor))->getTimestamp();
+        } catch (Throwable $e) {
+            return null;
+        }
+    }
+}
+
 $userId = (int) $user->id;
 
 // ── Acceso: solo grupo ADMINISTRACIÓN o superadmin ─────────────────────────
