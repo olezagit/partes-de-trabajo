@@ -41,35 +41,44 @@ $modeloPdfDefecto = !empty($conf->global->COMMANDE_ADDON_PDF) ? $conf->global->C
 
 // ── Guardar ───────────────────────────────────────────────────────────────────
 if ($action === 'save') {
-    // Statuts activos (checkboxes)
-    $statuts = array();
-    // Para admins, el estado 3 puede ser visible desde el setup
-    foreach (array(1, 2, 3) as $s) {
-        if (GETPOST('statut_'.$s, 'int')) $statuts[] = $s;
-    }
-    dolibarr_set_const($db, 'PARTES_STATUTS_ACTIVOS', implode(',', $statuts), 'chaine', 0, '', $conf->entity);
-
-    // Labels personalizados de tipos (por si quieren renombrarlos)
-    foreach (array(1, 2, 3, 4) as $t) {
-        $label = trim(GETPOST('tipo_label_'.$t, 'alphanohtml'));
-        if ($label !== '') {
-            dolibarr_set_const($db, 'PARTES_TIPO_LABEL_'.$t, $label, 'chaine', 0, '', $conf->entity);
+    try {
+        // Statuts activos (checkboxes)
+        $statuts = array();
+        // Para admins, el estado 3 puede ser visible desde el setup
+        foreach (array(1, 2, 3) as $s) {
+            if (GETPOST('statut_'.$s, 'int')) $statuts[] = $s;
         }
-    }
+        dolibarr_set_const($db, 'PARTES_STATUTS_ACTIVOS', implode(',', $statuts), 'chaine', 0, '', $conf->entity);
 
-    // Plantilla PDF por tipo de parte. Vacío = predeterminada → se elimina la constante.
-    foreach (array(1, 2, 3, 4) as $t) {
-        $modelo = trim(GETPOST('pdf_model_'.$t, 'aZ09'));
-        if ($modelo !== '' && isset($modelosPdf[$modelo])) {
+        // Labels personalizados de tipos (por si quieren renombrarlos)
+        foreach (array(1, 2, 3, 4) as $t) {
+            $label = trim(GETPOST('tipo_label_'.$t, 'alphanohtml'));
+            if ($label !== '') {
+                dolibarr_set_const($db, 'PARTES_TIPO_LABEL_'.$t, $label, 'chaine', 0, '', $conf->entity);
+            }
+        }
+
+        // Plantilla PDF por tipo de parte.
+        // Solo se acepta una plantilla de la lista de Dolibarr (lista blanca). Los modelos ODT
+        // llevan ':' y '/' en su identificador, por eso no se usa el filtro 'aZ09'.
+        // Vacío = predeterminada: dolibarr_set_const con valor vacío borra la constante.
+        foreach (array(1, 2, 3, 4) as $t) {
+            $modelo = trim((string) GETPOST('pdf_model_'.$t, 'alphanohtml'));
+            if ($modelo === '' || $modelo === '0' || !isset($modelosPdf[$modelo])) {
+                $modelo = '';
+            }
             dolibarr_set_const($db, 'PARTES_PDF_MODEL_'.$t, $modelo, 'chaine', 0, '', $conf->entity);
-        } else {
-            dolibarr_del_const($db, 'PARTES_PDF_MODEL_'.$t, $conf->entity);
         }
-    }
 
-    setEventMessages('Configuración guardada correctamente.', null, 'mesgs');
-    header('Location: '.$_SERVER['PHP_SELF']);
-    exit;
+        setEventMessages('Configuración guardada correctamente.', null, 'mesgs');
+        header('Location: '.$_SERVER['PHP_SELF']);
+        exit;
+    } catch (Throwable $e) {
+        // En vez de una página 500 en blanco, se muestra el error real (esta página es solo para admin)
+        error_log('PartesTrabajo setup.php (guardar): '.$e->getMessage().' @ '.$e->getFile().':'.$e->getLine());
+        setEventMessages('Error al guardar la configuración: '.$e->getMessage()
+            .' ('.basename($e->getFile()).':'.$e->getLine().')', null, 'errors');
+    }
 }
 
 // ── Valores actuales ──────────────────────────────────────────────────────────
@@ -190,6 +199,7 @@ foreach ($tipo_labels as $id => $label) {
     print '    <select name="pdf_model_'.$id.'" class="minwidth200">';
     print '      <option value=""'.($guardado === '' ? ' selected' : '').'>— Predeterminada —</option>';
     foreach ($modelosPdf as $nombreModelo => $descModelo) {
+        if ((string) $nombreModelo === '0') continue; // entrada "ninguna plantilla" de Dolibarr
         $sel = ($guardado === $nombreModelo) ? ' selected' : '';
         print '      <option value="'.htmlspecialchars($nombreModelo).'"'.$sel.'>'
               .htmlspecialchars($descModelo ?: $nombreModelo).' ('.htmlspecialchars($nombreModelo).')</option>';
@@ -200,7 +210,10 @@ foreach ($tipo_labels as $id => $label) {
     }
     print '    </select>';
     print '  </td>';
-    print '  <td class="hideonsmartphone opacitymedium"><code>pdf_'.htmlspecialchars($guardado !== '' ? $guardado : $modeloPdfDefecto).'.modules.php</code></td>';
+    $modeloMostrar = ($guardado !== '' ? $guardado : $modeloPdfDefecto);
+    print '  <td class="hideonsmartphone opacitymedium">'.(strpos($modeloMostrar, ':') !== false
+        ? 'Plantilla ODT'
+        : '<code>pdf_'.htmlspecialchars($modeloMostrar).'.modules.php</code>').'</td>';
     print '</tr>';
 }
 print '</table>';
