@@ -24,6 +24,7 @@ if (!$user->admin) {
     accessforbidden();
 }
 
+require_once DOL_DOCUMENT_ROOT.'/core/lib/admin.lib.php';   // dolibarr_set_const(): Dolibarr no la carga en todas las páginas
 require_once DOL_DOCUMENT_ROOT.'/core/modules/commande/modules_commande.php';
 
 $langs->loadLangs(array('partes_trabajo@partes_trabajo', 'admin', 'orders'));
