@@ -393,13 +393,22 @@ const PtDetalle = (() => {
                     <span class="pd-chevron">▾</span>
                 </button>
                 <div class="pd-section-body" id="sec-horas">
+                    <div class="pd-firma-info-existing">
+                        <div class="pd-firma-info-row">
+                            <span class="pd-field-lbl">Fecha del servicio</span>
+                            <span class="pd-field-val" id="pd-fecha-servicio">${escH(textoFechaServicio(fechaIsoDesdeFirma(p.fecha_firma)))}</span>
+                        </div>
+                        <div class="pd-firma-info-row">
+                            <span class="pd-field-lbl" style="font-weight:400">Se toma automáticamente de la fecha de firma del cliente.</span>
+                        </div>
+                    </div>
                     <div class="pd-firma-fields">
-                        <label class="pd-firma-label">Hora de inicio</label>
-                        <input type="datetime-local" id="pd-hora-inicio" class="pd-firma-input"
-                            value="${escH(p.horadeinicio||'')}">
-                        <label class="pd-firma-label">Hora de fin</label>
-                        <input type="datetime-local" id="pd-hora-fin" class="pd-firma-input"
-                            value="${escH(p.horadefin||'')}">
+                        <label class="pd-firma-label" for="pd-hora-inicio">Hora de inicio (obligatoria)</label>
+                        <input type="time" id="pd-hora-inicio" class="pd-firma-input" step="60" required
+                            value="${escH(horaDeValor(p.horadeinicio))}">
+                        <label class="pd-firma-label" for="pd-hora-fin">Hora de fin (obligatoria)</label>
+                        <input type="time" id="pd-hora-fin" class="pd-firma-input" step="60" required
+                            value="${escH(horaDeValor(p.horadefin))}">
                     </div>
                 </div>
             </div>
@@ -733,6 +742,43 @@ const PtDetalle = (() => {
     // ══════════════════════════════════════════════════════════════════════════
     // Checkboxes de tareas
     // ══════════════════════════════════════════════════════════════════════════
+    // Fecha/hora (ISO local "YYYY-MM-DDTHH:MM") en que el cliente confirmó su firma.
+    // De ella sale la fecha de inicio del servicio; las horas las escribe el técnico.
+    let fechaFirmaClienteIso = '';
+
+    /** "HH:MM" a partir de "HH:MM", "YYYY-MM-DDTHH:MM" o "d/m/Y H:i" ('' si no hay hora). */
+    function horaDeValor(v) {
+        const m = String(v || '').trim().match(/(?:^|[T\s])([01]?\d|2[0-3]):([0-5]\d)(?::\d{2})?$/);
+        return m ? m[1].padStart(2, '0') + ':' + m[2] : '';
+    }
+
+    /** "d/m/Y H:i" (como se guarda fecha_firma) → "YYYY-MM-DDTHH:MM" ('' si no es válida). */
+    function fechaIsoDesdeFirma(v) {
+        const m = String(v || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2}))?/);
+        if (!m) return '';
+        const hh = (m[4] || '00').padStart(2, '0');
+        return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}T${hh}:${m[5] || '00'}`;
+    }
+
+    /** Fecha y hora locales de ahora como "YYYY-MM-DDTHH:MM". */
+    function ahoraIsoLocal() {
+        const n = new Date();
+        return n.getFullYear() + '-' + String(n.getMonth() + 1).padStart(2, '0') + '-'
+            + String(n.getDate()).padStart(2, '0') + 'T'
+            + String(n.getHours()).padStart(2, '0') + ':' + String(n.getMinutes()).padStart(2, '0');
+    }
+
+    /** Texto "dd/mm/aaaa" para mostrar la fecha del servicio. */
+    function textoFechaServicio(iso) {
+        const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/);
+        return m ? `${m[3]}/${m[2]}/${m[1]}` : 'Se asigna al firmar el cliente';
+    }
+
+    function refrescarFechaServicio() {
+        const el = panel.querySelector('#pd-fecha-servicio');
+        if (el) el.textContent = textoFechaServicio(fechaFirmaClienteIso);
+    }
+
     let tareasTotal       = 0;
     let tareasCompletadas = new Set();
     let parteIdActual     = null;
@@ -1033,10 +1079,15 @@ const PtDetalle = (() => {
         const firmasCk = firmaC && firmaT;
         const nombreOk  = (panel.querySelector('#pd-nombre-cliente')?.value || '').trim().length > 0;
         const dniOk     = (panel.querySelector('#pd-dni-cliente')?.value    || '').trim().length > 0;
-        const horaIniOk = (panel.querySelector('#pd-hora-inicio')?.value    || '').trim().length > 0;
-        const horaFinOk = (panel.querySelector('#pd-hora-fin')?.value       || '').trim().length > 0;
+        // Horario: escrito a mano por el técnico, obligatorio (HH:MM) y fin posterior a inicio
+        const horaIni   = horaDeValor(panel.querySelector('#pd-hora-inicio')?.value);
+        const horaFin   = horaDeValor(panel.querySelector('#pd-hora-fin')?.value);
+        const horaIniOk = horaIni !== '';
+        const horaFinOk = horaFin !== '';
+        const horasOrdenOk = !horaIniOk || !horaFinOk || horaFin > horaIni;
 
-        const listo = todasOk && fichasOk && firmasCk && nombreOk && dniOk && horaIniOk && horaFinOk;
+        const listo = todasOk && fichasOk && firmasCk && nombreOk && dniOk
+                      && horaIniOk && horaFinOk && horasOrdenOk;
         btn.disabled = !listo;
 
         // Texto informativo en el botón
@@ -1054,7 +1105,9 @@ const PtDetalle = (() => {
         } else if (!firmaT) {
             btn.textContent = '🔧 Confirma la firma del técnico';
         } else if (!horaIniOk || !horaFinOk) {
-            btn.textContent = '⏱️ Rellena el horario del servicio';
+            btn.textContent = '⏱️ Introduce la hora de inicio y la de fin';
+        } else if (!horasOrdenOk) {
+            btn.textContent = '⏱️ La hora de fin debe ser posterior a la de inicio';
         } else {
             btn.textContent = '✅ Terminar parte';
         }
@@ -1984,33 +2037,17 @@ const PtDetalle = (() => {
             initCanvas(id);
         });
 
+        // Fecha del servicio = fecha de firma del cliente. Si ya hay firma guardada,
+        // se recupera de BD (fecha_firma); si no, se fijará al confirmar la firma.
+        fechaFirmaClienteIso = p.firma_cliente ? fechaIsoDesdeFirma(p.fecha_firma) : '';
+        refrescarFechaServicio();
+
         // Si ya existen firmas guardadas, precargarlas en el canvas y bloquear
         if (p.firma_cliente) cargarFirmaExistente('cliente', p.firma_cliente);
         if (p.firma_tecnico) cargarFirmaExistente('tecnico', p.firma_tecnico);
 
-        // Autorellenar hora-inicio al confirmar firma del técnico
-        // Autorellenar hora-fin al confirmar firma del cliente
-        panel.querySelectorAll('.pd-firma-confirm').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const target = btn.dataset.target;
-                const now = new Date();
-                // Format: YYYY-MM-DDTHH:MM
-                const fmt = now.getFullYear() + '-'
-                    + String(now.getMonth()+1).padStart(2,'0') + '-'
-                    + String(now.getDate()).padStart(2,'0') + 'T'
-                    + String(now.getHours()).padStart(2,'0') + ':'
-                    + String(now.getMinutes()).padStart(2,'0');
-
-                if (target === 'tecnico') {
-                    const inp = panel.querySelector('#pd-hora-inicio');
-                    if (inp && !inp.value) { inp.value = fmt; actualizarBotonTerminar(); }
-                }
-                if (target === 'cliente') {
-                    const inp = panel.querySelector('#pd-hora-fin');
-                    if (inp && !inp.value) { inp.value = fmt; actualizarBotonTerminar(); }
-                }
-            }, { capture: true }); // capture=true para que se ejecute ANTES de lockFirma
-        });
+        // Las horas de inicio y de fin las escribe el técnico a mano (NO se rellenan
+        // solas al firmar). Solo la FECHA se toma de la firma del cliente (ver lockFirma).
 
         // Botones Editar / Eliminar (delegados en el panel)
         panel.addEventListener('click', e => {
@@ -2040,7 +2077,17 @@ const PtDetalle = (() => {
         };
         Object.entries(camposAGuardar).forEach(([id, campo]) => {
             panel.querySelector('#' + id)?.addEventListener('change', e => {
-                const valor = e.target.value || '';
+                let valor = e.target.value || '';
+                if (campo === 'horadeinicio' || campo === 'horadefin') {
+                    valor = horaDeValor(valor); // solo "HH:MM"; el servidor añade la fecha de firma
+                    const ini = horaDeValor(panel.querySelector('#pd-hora-inicio')?.value);
+                    const fin = horaDeValor(panel.querySelector('#pd-hora-fin')?.value);
+                    if (ini && fin && fin <= ini) {
+                        // Incoherente: no se guarda hasta que el técnico lo corrija
+                        // (el botón "Terminar" ya avisa en pantalla).
+                        return;
+                    }
+                }
                 guardarProgreso({ id: parteId, [campo]: valor });
             });
         });
@@ -2069,6 +2116,16 @@ const PtDetalle = (() => {
                 showFeedback(feedback, '⚠️ Completa todos los campos y firmas.', 'warn');
                 return;
             }
+            const horaIniVal = horaDeValor(panel.querySelector('#pd-hora-inicio')?.value);
+            const horaFinVal = horaDeValor(panel.querySelector('#pd-hora-fin')?.value);
+            if (!horaIniVal || !horaFinVal) {
+                showFeedback(feedback, '⚠️ Introduce la hora de inicio y la hora de fin (obligatorias).', 'warn');
+                return;
+            }
+            if (horaFinVal <= horaIniVal) {
+                showFeedback(feedback, '⚠️ La hora de fin debe ser posterior a la hora de inicio.', 'warn');
+                return;
+            }
 
             btnTerminar.disabled    = true;
             btnTerminar.textContent = '⏳ Enviando…';
@@ -2079,8 +2136,12 @@ const PtDetalle = (() => {
                 nombre_cliente: nombreCliente,
                 dni_cliente:    dniCliente,
                 firma_tecnico:  canvasTecnico.toDataURL('image/png'),
-                horadeinicio:   (panel.querySelector('#pd-hora-inicio')?.value || ''),
-                horadefin:      (panel.querySelector('#pd-hora-fin')?.value    || ''),
+                // Solo la hora (HH:MM) escrita por el técnico...
+                horadeinicio:   horaIniVal,
+                horadefin:      horaFinVal,
+                // ...y la fecha/hora de la firma del cliente, medida AQUÍ (en el dispositivo)
+                // para que sea la real aunque el envío se haga más tarde, sin conexión.
+                fecha_firma:    fechaFirmaClienteIso || ahoraIsoLocal(),
             };
 
             try {
@@ -2341,14 +2402,23 @@ const PtDetalle = (() => {
 
             if (name === 'tecnico') {
                 payload.firma_tecnico = dataUrl;
-                const horaIni = panel.querySelector('#pd-hora-inicio')?.value;
-                if (horaIni) payload.horadeinicio = horaIni;
             } else if (name === 'cliente') {
                 payload.firma_cliente  = dataUrl;
                 payload.nombre_cliente = panel.querySelector('#pd-nombre-cliente')?.value || '';
                 payload.dni_cliente    = panel.querySelector('#pd-dni-cliente')?.value    || '';
-                const horaFin = panel.querySelector('#pd-hora-fin')?.value;
-                if (horaFin) payload.horadefin = horaFin;
+                // La fecha del servicio es la de ESTA firma del cliente. Se mide en el
+                // dispositivo (válido también sin conexión) y el servidor la une a las
+                // horas escritas por el técnico.
+                fechaFirmaClienteIso = ahoraIsoLocal();
+                payload.fecha_firma  = fechaFirmaClienteIso;
+                refrescarFechaServicio();
+                // Horas ya escritas (solo HH:MM): se reenvían para que el servidor
+                // las recomponga con la nueva fecha de firma.
+                const hIni = horaDeValor(panel.querySelector('#pd-hora-inicio')?.value);
+                const hFin = horaDeValor(panel.querySelector('#pd-hora-fin')?.value);
+                if (hIni) payload.horadeinicio = hIni;
+                if (hFin) payload.horadefin    = hFin;
+                if (hIni && hFin && hFin <= hIni) { delete payload.horadeinicio; delete payload.horadefin; }
             }
             guardarProgreso(payload);
         }
@@ -2378,7 +2448,13 @@ const PtDetalle = (() => {
             // Borrar también en BD para que no reaparezca al recargar
             const payloadClear = { id: currentId };
             if (name === 'tecnico') payloadClear.firma_tecnico = '';
-            if (name === 'cliente') payloadClear.firma_cliente = '';
+            if (name === 'cliente') {
+                payloadClear.firma_cliente = '';
+                // Sin firma del cliente no hay fecha del servicio
+                payloadClear.fecha_firma   = '';
+                fechaFirmaClienteIso = '';
+                refrescarFechaServicio();
+            }
             guardarProgreso(payloadClear);
         } else {
             // Solo editar: desbloquear sin borrar

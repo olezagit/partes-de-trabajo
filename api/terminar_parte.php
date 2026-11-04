@@ -11,7 +11,13 @@
  *   nombre_cliente: string,   // nombre del firmante cliente
  *   dni_cliente:    string,   // DNI del firmante cliente
  *   firma_tecnico:  string,   // dataURL base64 del canvas
+ *   horadeinicio:   string,   // "HH:MM" escrita a mano por el técnico (obligatoria)
+ *   horadefin:      string,   // "HH:MM" escrita a mano por el técnico (obligatoria)
+ *   fecha_firma:    string,   // "YYYY-MM-DDTHH:MM" en que el cliente firmó (medida en el
+ *                             // dispositivo; si falta se usa la hora del servidor)
  * }
+ *
+ * La fecha de inicio/fin del servicio es SIEMPRE la fecha de la firma del cliente.
  */
 
 if (!defined('PT_FROM_DISPATCHER')) {
@@ -30,6 +36,8 @@ $firmaTecnico  = trim($data['firma_tecnico']   ?? '');
 $horaInicio    = trim($data['horadeinicio']    ?? '');
 $horaFin       = trim($data['horadefin']       ?? '');
 
+require_once __DIR__.'/../inc/helpers_horas.php';
+
 if ($parteId <= 0) {
     http_response_code(400);
     die(json_encode(['error' => 'ID de parte inválido']));
@@ -42,9 +50,21 @@ if (empty($nombreCliente) || empty($dniCliente)) {
     http_response_code(400);
     die(json_encode(['error' => 'Nombre y DNI del cliente son obligatorios']));
 }
-if (empty($horaInicio) || empty($horaFin)) {
+if ($horaInicio === '' || $horaFin === '') {
     http_response_code(400);
     die(json_encode(['error' => 'La hora de inicio y de fin son obligatorias']));
+}
+// Solo cuenta la hora "HH:MM" (si llega "YYYY-MM-DDTHH:MM" de un navegador con el JS
+// antiguo, se descarta su fecha: la fecha es la de la firma del cliente).
+$horaInicio = pt_hora_hhmm($horaInicio);
+$horaFin    = pt_hora_hhmm($horaFin);
+if ($horaInicio === '' || $horaFin === '') {
+    http_response_code(400);
+    die(json_encode(['error' => 'La hora de inicio y de fin no son válidas (use HH:MM)']));
+}
+if ($horaFin <= $horaInicio) {
+    http_response_code(400);
+    die(json_encode(['error' => 'La hora de fin debe ser posterior a la hora de inicio']));
 }
 
 $userId = (int)$user->id;
@@ -80,8 +100,16 @@ if (!$esAdmin) {
     }
 }
 
-// Fecha y hora de firma
-$fechaFirma = date('d/m/Y H:i');
+// Fecha y hora de firma DEL CLIENTE: la medida en el dispositivo al confirmar su firma
+// (así es la real aunque el albarán se firmara sin conexión y se envíe más tarde).
+// Si no llega o no es válida, la del servidor.
+$fechaFirma = pt_fecha_firma_dmyhi($data['fecha_firma'] ?? '');
+if ($fechaFirma === '') $fechaFirma = date('d/m/Y H:i');
+
+// Fecha de inicio = fecha de firma del cliente; las horas las puso el técnico a mano
+$ymdFirma   = pt_fecha_ymd($fechaFirma);
+$horaInicio = pt_componer_fecha_hora($ymdFirma, $horaInicio); // "YYYY-MM-DDTHH:MM"
+$horaFin    = pt_componer_fecha_hora($ymdFirma, $horaFin);
 $userObj    = new User($db);
 $userObj->fetch($userId);
 $nombreTecnico = trim($userObj->firstname.' '.$userObj->lastname) ?: $userObj->login;
@@ -427,4 +455,4 @@ echo json_encode([
                         && isset($emailCliente) && $emailCliente !== ''
                         && isset($tienePdf) && $tienePdf,
     'ts'             => time(),
-], JSON_UNESCAPED_UNICODE);
+], JSON_UNESCAPED_UNICODE);

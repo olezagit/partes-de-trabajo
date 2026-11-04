@@ -10,13 +10,22 @@
  *
  * POST JSON: { id: int, ...campos opcionales }
  *   firma_tecnico, firma_cliente, nombre_cliente, dni_cliente,
- *   horadeinicio, horadefin, foto_1..foto_10 (dataURL base64 o '' para borrar)
+ *   horadeinicio, horadefin, fecha_firma, foto_1..foto_10 (dataURL base64 o '' para borrar)
+ *
+ * HORARIO DEL SERVICIO: horadeinicio / horadefin son SOLO la hora ("HH:MM") que el
+ * técnico escribe a mano. La fecha NO se envía aparte: es la de la firma del cliente
+ * (fecha_firma, "YYYY-MM-DDTHH:MM" medida en el dispositivo en el momento de firmar,
+ * para que sea la real también si el albarán se firmó sin conexión y se sincroniza
+ * más tarde; '' = firma del cliente borrada). El servidor une fecha + hora y guarda
+ * "YYYY-MM-DDTHH:MM" en horadeinicio/horadefinalizacion.
  */
 
 if (!defined('PT_FROM_DISPATCHER')) {
     http_response_code(403);
     die(json_encode(['error' => 'Acceso denegado']));
 }
+
+require_once __DIR__.'/../inc/helpers_horas.php';
 
 $data    = json_decode(file_get_contents('php://input'), true);
 $parteId = (int)($data['id'] ?? 0);
@@ -64,8 +73,8 @@ $camposPermitidos = array(
     'firma_cliente'  => 'firma_cliente',
     'nombre_cliente' => 'nombre_firmante',
     'dni_cliente'    => 'dni_firmante',
-    'horadeinicio'   => 'horadeinicio',
-    'horadefin'      => 'horadefinalizacion',
+    // horadeinicio / horadefin / fecha_firma se tratan aparte (ver más abajo):
+    // hay que combinarlos con la fecha de firma del cliente antes de guardarlos.
 );
 // Fotos del trabajo: foto_1..foto_10 (dataURL base64, o '' para eliminar la foto)
 for ($i = 1; $i <= 10; $i++) {
@@ -86,19 +95,67 @@ foreach ($camposPermitidos as $payloadKey => $columna) {
     }
 }
 
+// ── Horario del servicio + fecha de firma del cliente ────────────────────────
+// Compatibilidad con navegadores que aún tengan en caché el JS anterior (no envían
+// fecha_firma): la fecha es la de la firma del cliente, así que se fija al guardarla
+// y se limpia al borrarla.
+if (!array_key_exists('fecha_firma', $data) && array_key_exists('firma_cliente', $data)) {
+    $data['fecha_firma'] = ((string)$data['firma_cliente'] !== '') ? date('Y-m-d\TH:i') : '';
+}
+
+$tocaHorario = array_key_exists('horadeinicio', $data)
+            || array_key_exists('horadefin', $data)
+            || array_key_exists('fecha_firma', $data);
+
+if ($tocaHorario) {
+    $sqlAct  = "SELECT fecha_firma, horadeinicio, horadefinalizacion FROM ".MAIN_DB_PREFIX."commande_extrafields";
+    $sqlAct .= " WHERE fk_object = ".$parteId;
+    $resAct  = $db->query($sqlAct);
+    $actual  = ($resAct && $db->num_rows($resAct) > 0) ? $db->fetch_object($resAct) : null;
+
+    // Fecha de firma del cliente: la nueva (si viene) o la que ya hay en BD
+    if (array_key_exists('fecha_firma', $data)) {
+        $fechaRaw = trim((string)$data['fecha_firma']);
+        $fechaDmy = ($fechaRaw === '') ? '' : pt_fecha_firma_dmyhi($fechaRaw);
+        if ($fechaRaw !== '' && $fechaDmy === '') {
+            http_response_code(400);
+            die(json_encode(['error' => 'Fecha de firma no válida']));
+        }
+        $updates['fecha_firma'] = $fechaDmy;
+    } else {
+        $fechaDmy = $actual ? (string)$actual->fecha_firma : '';
+    }
+    $ymd = pt_fecha_ymd($fechaDmy);
+
+    // Horas: solo "HH:MM" (la nueva si viene; si no, la parte hora de la guardada)
+    $horas = array();
+    foreach (array('horadeinicio' => 'inicio', 'horadefin' => 'fin') as $clave => $etiqueta) {
+        if (array_key_exists($clave, $data)) {
+            $raw = trim((string)$data[$clave]);
+            $hm  = ($raw === '') ? '' : pt_hora_hhmm($raw);
+            if ($raw !== '' && $hm === '') {
+                http_response_code(400);
+                die(json_encode(['error' => 'La hora de '.$etiqueta.' no es válida (use HH:MM)']));
+            }
+        } else {
+            $col = ($clave === 'horadeinicio') ? 'horadeinicio' : 'horadefinalizacion';
+            $hm  = $actual ? pt_hora_hhmm($actual->$col) : '';
+        }
+        $horas[$clave] = $hm;
+    }
+    if ($horas['horadeinicio'] !== '' && $horas['horadefin'] !== '' && $horas['horadefin'] <= $horas['horadeinicio']) {
+        http_response_code(400);
+        die(json_encode(['error' => 'La hora de fin debe ser posterior a la hora de inicio']));
+    }
+
+    // Se recomponen SIEMPRE las dos: si cambia la fecha de firma, cambian ambas
+    $updates['horadeinicio']       = pt_componer_fecha_hora($ymd, $horas['horadeinicio']);
+    $updates['horadefinalizacion'] = pt_componer_fecha_hora($ymd, $horas['horadefin']);
+}
+
 if (empty($updates)) {
     http_response_code(400);
     die(json_encode(['error' => 'Ningún campo válido para guardar']));
-}
-
-// Si se guarda la firma del técnico y no hay fecha_firma todavía, marcar fecha
-if (isset($updates['firma_tecnico']) && $updates['firma_tecnico'] !== '') {
-    $sqlCheckFecha = "SELECT fecha_firma FROM ".MAIN_DB_PREFIX."commande_extrafields WHERE fk_object = ".$parteId;
-    $resFecha = $db->query($sqlCheckFecha);
-    $objFecha = $resFecha && $db->num_rows($resFecha) > 0 ? $db->fetch_object($resFecha) : null;
-    if (!$objFecha || empty($objFecha->fecha_firma)) {
-        $updates['fecha_firma'] = date('d/m/Y H:i');
-    }
 }
 
 // Comprobar si ya existe registro extrafields para este pedido

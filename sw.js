@@ -4,7 +4,7 @@
  * Los recursos se cachean la primera vez que se usan (cache-on-demand).
  */
 
-const SW_VERSION   = 'pt-v1.5';
+const SW_VERSION   = 'pt-v1.6';
 const CACHE_STATIC = SW_VERSION + '-static';
 const CACHE_API    = SW_VERSION + '-api';
 
