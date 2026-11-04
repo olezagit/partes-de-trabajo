@@ -316,7 +316,7 @@ sort($localidadesDistintas, SORT_STRING | SORT_FLAG_CASE);
 // DOL_URL_ROOT puede no incluir /htdocs/ dependiendo de la version/configuracion.
 $pt_self = dirname($_SERVER['PHP_SELF']);  // ej: /gestion/htdocs/custom/partes_trabajo
 $pt_base = rtrim($pt_self, '/');           // sin barra final
-$pt_v    = '?v=8.3'; // cache-busting: incrementar al desplegar cambios (v8.3: panel de estadisticas para admins + boton en el listado)
+$pt_v    = '?v=8.4'; // cache-busting: incrementar al desplegar cambios (v8.4: horas de inicio/fin manuales y obligatorias; fecha = firma del cliente. v8.3: panel de estadisticas para admins + boton en el listado)
 
 $moreheadcontent  = '<link rel="manifest" href="'.$pt_base.'/manifest.json">'."\n";
 $moreheadcontent .= '<meta name="theme-color" content="#0F172A">'."\n";
